@@ -6,6 +6,7 @@ import { PlayerManager } from "./managers/PlayerManager";
 import { PropertyManager } from "./managers/PropertyManager";
 // import { NEARIntegration } from "./nearIntegration";
 import { RandomnessService } from "./randomnessService";
+import { roll } from "./userfunctions/roll";
 
 class MonopolyServer {
     private wss: WebSocketServer;
@@ -245,14 +246,15 @@ class MonopolyServer {
         // Get all player IDs for verifiable randomness
         const playerIds = game.players.map(p => p.id);
 
-        // Use verifiable randomness service
+        // Use verifiable randomness service for proof/seed
         const randomResult = await this.randomnessService.getVerifiableRandom(
             gameId,
             currentRound + 1,
             playerIds
         );
 
-        const diceRoll = randomResult.randomValue;
+        // But use the roll() function for the actual dice value
+        const diceRoll = await roll();
         const moveResult = PlayerManager.movePlayer(currentPlayer, diceRoll, game.getBoardLength());
         const landedBlock = game.getBlockAtPosition(moveResult.newPosition);
 

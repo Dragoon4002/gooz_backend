@@ -1,7 +1,7 @@
 import { JsonRpcProvider, Wallet } from "ethers";
 import { Randomness } from "randomness-js";
 
-// Set up your ethers provider and wallet
+// Set up your ethers provider and wallet with timeout configuration
 const rpc = new JsonRpcProvider("https://sepolia.base.org");
 const wallet = new Wallet("07ab3b4cb19f3f105efc697d1281cdd569c2053b1e0d2c577ef7102c8a0874a4", rpc);
 
@@ -10,9 +10,15 @@ let diceRollsList: number[] = [];
 let rollIndex: number = 0;
 
 async function randomGenerator(wallet: any) {
-    // Create an instance using Base Sepolia testnet
-    const randomness = Randomness.createBaseSepolia(wallet);
-    const response = await randomness.requestRandomness();
+    try {
+        // Create an instance using Base Sepolia testnet
+        const randomness = Randomness.createBaseSepolia(wallet);
+        const response = await Promise.race([
+            randomness.requestRandomness(),
+            new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Randomness request timeout')), 25000)
+            )
+        ]) as any;
 
     // Convert hex randomness to decimal
     const decimalValue = BigInt(response.randomness.toString());
@@ -29,11 +35,24 @@ async function randomGenerator(wallet: any) {
         diceRolls.push(Math.floor(Math.random() * 6) + 1);
     }
 
-    return {
-        ...response,
-        decimalValue: decimalValue.toString(),
-        diceRolls: diceRolls.slice(0, 99) // Ensure exactly 99 rolls
-    };
+        return {
+            ...response,
+            decimalValue: decimalValue.toString(),
+            diceRolls: diceRolls.slice(0, 99) // Ensure exactly 99 rolls
+        };
+    } catch (error) {
+        console.error('Randomness generation failed:', error);
+        // Fallback to Math.random() if blockchain fails
+        const fallbackRolls: number[] = [];
+        for (let i = 0; i < 99; i++) {
+            fallbackRolls.push(Math.floor(Math.random() * 6) + 1);
+        }
+        return {
+            randomness: '0x0',
+            decimalValue: '0',
+            diceRolls: fallbackRolls
+        };
+    }
 }
 
 async function initializeDiceRolls() {
