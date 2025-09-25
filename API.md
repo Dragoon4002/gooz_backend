@@ -164,7 +164,7 @@ Rolls dice for the current player's turn.
 
 ### 4. BUY_PROPERTY
 
-Buys the property the player landed on (if available for purchase).
+Buys the property the player landed on (if available for purchase). A transaction fee of 1% of the property price is automatically deducted from the player's funds.
 
 **Request:**
 ```json
@@ -186,6 +186,8 @@ Buys the property the player landed on (if available for purchase).
     "block": {...}
 }
 ```
+
+**Note:** The player pays the property price plus a 1% transaction fee (e.g., $60 property costs $60.60 total).
 
 ### 5. PASS_PROPERTY
 
@@ -211,7 +213,7 @@ Declines to buy the property the player landed on.
 
 ### 6. SELL_PROPERTY
 
-Sells a property owned by the player.
+Sells a property owned by the player. The player receives 50% of the original purchase price minus a 1% transaction fee.
 
 **Request:**
 ```json
@@ -234,6 +236,8 @@ Sells a property owned by the player.
     "block": {...}
 }
 ```
+
+**Note:** The player receives the sell price minus a 1% transaction fee (e.g., selling a $60 property gives $30 - $0.30 = $29.70).
 
 ### 7. MESSAGE
 
@@ -283,7 +287,7 @@ Sent to a player when they land on an unowned property.
 
 ### RENT_PAID
 
-Broadcasted when a player pays rent to another player.
+Broadcasted when a player pays rent to another player. The payer pays the rent amount plus a 1% transaction fee.
 
 ```json
 {
@@ -296,6 +300,8 @@ Broadcasted when a player pays rent to another player.
     "owner": {...}
 }
 ```
+
+**Note:** The payer pays the rent amount plus a 1% transaction fee (e.g., $10 rent costs $10.10 total), but the owner receives the full rent amount.
 
 ### INSUFFICIENT_FUNDS
 
@@ -437,10 +443,11 @@ The game board consists of 21 spaces:
 2. **Turns:** Players take turns rolling dice (2-12 range) and moving clockwise
 3. **Properties:** Landing on unowned properties triggers BUY_OR_PASS decision
 4. **Rent:** Landing on owned properties requires rent payment to owner
-5. **Corner Blocks:** Have special effects (gain/lose money, move to jail)
-6. **Passing GO:** Collect $200 when passing or landing on GO
-7. **Property Sales:** Players can sell properties for half the purchase price
-8. **Game End:** Game ends when a player wins or insufficient players remain
+5. **Transaction Fees:** All property transactions (buy/sell) and rent payments incur a 1% fee
+6. **Corner Blocks:** Have special effects (gain/lose money, move to jail)
+7. **Passing GO:** Collect $200 when passing or landing on GO
+8. **Property Sales:** Players can sell properties for half the purchase price minus fees
+9. **Game End:** Game ends when a player wins or insufficient players remain
 
 ## Connection Lifecycle
 

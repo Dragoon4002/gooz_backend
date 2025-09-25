@@ -20,6 +20,8 @@ async function randomGenerator(wallet: any) {
             )
         ]) as any;
 
+    console.log('🎲 Randomness Response:', response);
+
     // Convert hex randomness to decimal
     const decimalValue = BigInt(response.randomness.toString());
 

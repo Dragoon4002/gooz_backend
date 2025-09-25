@@ -51,11 +51,14 @@ export class PlayerManager {
     }
 
     static canAffordProperty(player: Player, block: Block): boolean {
-        return player.poolAmt >= (block.price || 0);
+        const price = block.price || 0;
+        const fee = Math.floor(price * 0.01);
+        return player.poolAmt >= (price + fee);
     }
 
     static canAffordRent(player: Player, rentAmount: number): boolean {
-        return player.poolAmt >= rentAmount;
+        const fee = Math.floor(rentAmount * 0.01);
+        return player.poolAmt >= (rentAmount + fee);
     }
 
     static buyProperty(player: Player, block: Block): boolean {
@@ -63,7 +66,9 @@ export class PlayerManager {
             return false;
         }
 
-        player.poolAmt -= (block.price || 0);
+        const price = block.price || 0;
+        const fee = Math.floor(price * 0.01);
+        player.poolAmt -= (price + fee);
         player.ownedBlocks.push(block.name);
         block.owner = player.id;
 
@@ -76,7 +81,9 @@ export class PlayerManager {
         }
 
         const sellPrice = Math.floor((block.price || 0) / 2);
-        player.poolAmt += sellPrice;
+        const fee = Math.floor(sellPrice * 0.01);
+        const netAmount = sellPrice - fee;
+        player.poolAmt += netAmount;
         player.ownedBlocks = player.ownedBlocks.filter(b => b !== block.name);
         block.owner = null;
 
@@ -84,11 +91,14 @@ export class PlayerManager {
     }
 
     static payRent(payer: Player, owner: Player, amount: number): boolean {
-        if (!PlayerManager.canAffordRent(payer, amount)) {
+        const fee = Math.floor(amount * 0.01);
+        const totalCost = amount + fee;
+
+        if (payer.poolAmt < totalCost) {
             return false;
         }
 
-        payer.poolAmt -= amount;
+        payer.poolAmt -= totalCost;
         owner.poolAmt += amount;
 
         return true;
