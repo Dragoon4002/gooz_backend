@@ -1,0 +1,36 @@
+import { Player, Block, PendingRent, GameState } from "../types";
+export declare class GameRoom implements GameState {
+    id: string;
+    players: Player[];
+    currentPlayerIndex: number;
+    gameStarted: boolean;
+    waitingForAction: boolean;
+    pendingBlock: Block | null;
+    pendingRent: PendingRent | null;
+    board: Block[];
+    private boardManager;
+    constructor(id: string);
+    addPlayer(player: Player): boolean;
+    removePlayer(playerId: string): boolean;
+    startGame(): boolean;
+    getCurrentPlayer(): Player | null;
+    nextTurn(): void;
+    canPlayerTakeAction(playerId: string): boolean;
+    canPlayerBuyOrPass(playerId: string): boolean;
+    setPendingAction(block: Block): void;
+    clearPendingAction(): void;
+    setPendingRent(rent: PendingRent): void;
+    clearPendingRent(): void;
+    getBlockAtPosition(position: number): Block | null;
+    getBlockByName(name: string): Block | null;
+    getBoardLength(): number;
+    isGameFull(): boolean;
+    isGameEmpty(): boolean;
+    hasMinimumPlayers(): boolean;
+    getPlayerById(playerId: string): Player | undefined;
+    isPlayerInGame(playerId: string): boolean;
+    getAllSanitizedPlayers(): import("../types").SanitizedPlayer[];
+    resetGame(): void;
+    getGameState(): GameState;
+    canStartGame(): boolean;
+}
