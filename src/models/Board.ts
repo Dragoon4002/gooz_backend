@@ -9,7 +9,7 @@ export class Board {
 
     private createBoard(): Block[] {
         const board: Block[] = [
-            // Corner 1 - GO
+            // Corner 1 - GO (position 0)
             {
                 name: "GO",
                 imageURL: "/images/go.png",
@@ -20,12 +20,11 @@ export class Board {
             }
         ];
 
-        // Side 1 - 4 properties
+        // Side 1 - 3 properties (positions 1-3)
         const side1Properties = [
             { name: "Mediterranean Avenue", price: 60, rent: 10, imageURL: "/images/mediterranean.png" },
             { name: "Baltic Avenue", price: 60, rent: 10, imageURL: "/images/baltic.png" },
-            { name: "Oriental Avenue", price: 100, rent: 15, imageURL: "/images/oriental.png" },
-            { name: "Vermont Avenue", price: 100, rent: 15, imageURL: "/images/vermont.png" }
+            { name: "Oriental Avenue", price: 100, rent: 15, imageURL: "/images/oriental.png" }
         ];
 
         side1Properties.forEach(prop => {
@@ -36,7 +35,7 @@ export class Board {
             } as Block);
         });
 
-        // Corner 2 - Jail
+        // Corner 2 - Jail (position 4)
         board.push({
             name: "Jail",
             imageURL: "/images/jail.png",
@@ -46,11 +45,9 @@ export class Board {
             }
         });
 
-        // Side 2 - 4 properties
+        // Side 2 - 3 properties (positions 5-6)
         const side2Properties = [
-            { name: "St. Charles Place", price: 140, rent: 20, imageURL: "/images/stcharles.png" },
-            { name: "Electric Company", price: 150, rent: 25, imageURL: "/images/electric.png" },
-            { name: "States Avenue", price: 140, rent: 20, imageURL: "/images/states.png" },
+            { name: "Vermont Avenue", price: 100, rent: 15, imageURL: "/images/vermont.png" },
             { name: "Virginia Avenue", price: 160, rent: 25, imageURL: "/images/virginia.png" }
         ];
 
@@ -62,7 +59,7 @@ export class Board {
             } as Block);
         });
 
-        // Corner 3 - Free Parking
+        // Corner 3 - Free Parking (position 7)
         board.push({
             name: "Free Parking",
             imageURL: "/images/freeparking.png",
@@ -72,12 +69,11 @@ export class Board {
             }
         });
 
-        // Side 3 - 4 properties
+        // Side 3 - 3 properties (positions 8-10)
         const side3Properties = [
             { name: "St. James Place", price: 180, rent: 30, imageURL: "/images/stjames.png" },
             { name: "Tennessee Avenue", price: 180, rent: 30, imageURL: "/images/tennessee.png" },
-            { name: "New York Avenue", price: 200, rent: 35, imageURL: "/images/newyork.png" },
-            { name: "Kentucky Avenue", price: 220, rent: 40, imageURL: "/images/kentucky.png" }
+            { name: "New York Avenue", price: 200, rent: 35, imageURL: "/images/newyork.png" }
         ];
 
         side3Properties.forEach(prop => {
@@ -88,22 +84,20 @@ export class Board {
             } as Block);
         });
 
-        // Corner 4 - Go to Jail
+        // Corner 4 - Go to Jail (position 11)
         board.push({
             name: "Go to Jail",
             imageURL: "/images/gotojail.png",
             cornerBlock: true,
             cornerFunction: (player: Player) => {
-                player.position = 5; // Move to jail
+                player.position = 4; // Move to jail (updated position)
                 player.poolAmt -= 100;
             }
         });
 
-        // Side 4 - 4 properties
+        // Side 4 - 3 properties (positions 12-13)
         const side4Properties = [
-            { name: "Atlantic Avenue", price: 260, rent: 50, imageURL: "/images/atlantic.png" },
-            { name: "Ventnor Avenue", price: 260, rent: 50, imageURL: "/images/ventnor.png" },
-            { name: "Water Works", price: 150, rent: 25, imageURL: "/images/waterworks.png" },
+            { name: "Kentucky Avenue", price: 220, rent: 40, imageURL: "/images/kentucky.png" },
             { name: "Marvin Gardens", price: 280, rent: 55, imageURL: "/images/marvin.png" }
         ];
 

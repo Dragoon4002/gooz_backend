@@ -1,7 +1,7 @@
 import { WebSocket } from "ws";
 import { Player, Block, SanitizedPlayer, GameState } from "../types";
 export declare class PlayerManager {
-    static createPlayer(name: string, webSocket: WebSocket, colorCode?: string): Player;
+    static createPlayer(name: string, webSocket: WebSocket, colorCode?: string, playerId?: string): Player;
     static generatePlayerId(): string;
     static generateRandomColor(): string;
     static sanitizePlayer(player: Player): SanitizedPlayer;
@@ -20,4 +20,5 @@ export declare class PlayerManager {
     static removePlayerFromGame(players: Player[], playerId: string): Player[];
     static validatePlayerTurn(gameState: GameState, playerId: string): boolean;
     static getNextPlayerIndex(currentIndex: number, totalPlayers: number): number;
+    static isPlayerIdDuplicate(players: Player[], playerId: string): boolean;
 }
