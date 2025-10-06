@@ -30,6 +30,9 @@ export interface GameState {
     pendingBlock: Block | null;
     pendingRent: PendingRent | null;
     board: Block[];
+    totalPool: number;
+    tempPool: number;
+    initialPlayerCount: number;
 }
 
 export interface PendingRent {
@@ -49,7 +52,8 @@ export interface GameMessage {
     type: 'GAME_CREATED' | 'PLAYER_JOINED' | 'GAME_STARTED' | 'DICE_ROLLED' |
           'BUY_OR_PASS' | 'PROPERTY_BOUGHT' | 'PROPERTY_PASSED' | 'PROPERTY_SOLD' |
           'RENT_PAID' | 'CORNER_BLOCK_EFFECT' | 'NEXT_TURN' | 'INSUFFICIENT_FUNDS' |
-          'ERROR' | 'PLAYER_DISCONNECTED' | 'PASSED_GO' | 'GAME_ENDED' | 'CONNECTION_ESTABLISHED' | 'MESSAGE';
+          'ERROR' | 'PLAYER_DISCONNECTED' | 'PASSED_GO' | 'GAME_ENDED' | 'PLAYER_BANKRUPT' |
+          'REWARDS_RECEIVED' | 'CONNECTION_ESTABLISHED' | 'MESSAGE';
     [key: string]: any;
 }
 

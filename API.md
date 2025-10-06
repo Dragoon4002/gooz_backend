@@ -137,9 +137,11 @@ Starts the game (only the game creator can send this message). Requires at least
     "type": "GAME_STARTED",
     "currentPlayer": {...},
     "players": [...],
-    "poolBalance": "0"
+    "totalPool": 2400
 }
 ```
+
+**Note:** `totalPool` is calculated as: `numberOfPlayers × (500 + 100)`. For example, 4 players = 4 × 600 = 2400.
 
 **Errors:**
 - `"Game not found"` - Invalid gameId
@@ -329,7 +331,7 @@ Broadcasted when a player pays rent to another player. The payer pays the rent a
 
 ### INSUFFICIENT_FUNDS
 
-Sent to a player who cannot afford rent and must sell properties.
+Sent to a player who cannot afford rent and has properties they can sell.
 
 ```json
 {
@@ -340,6 +342,63 @@ Sent to a player who cannot afford rent and must sell properties.
     "message": "You must sell properties to pay rent or declare bankruptcy"
 }
 ```
+
+**Note:** If the player has no properties to sell (empty `ownedBlocks`), they are automatically declared bankrupt and removed from the game.
+
+### REWARDS_RECEIVED
+
+Broadcasted when a player goes bankrupt and receives a reward based on their finishing position.
+
+```json
+{
+    "type": "REWARDS_RECEIVED",
+    "playerId": "player-uuid",
+    "playerName": "John Doe",
+    "rewardAmount": 600,
+    "eliminationOrder": 2,
+    "remainingPool": 1800
+}
+```
+
+**Reward Calculation:**
+- **1st eliminated**: Gets `0` (nothing)
+- **2nd+ eliminated** (including 2nd place): Gets `tempPool / (2 × playersRemaining)` using temp calculation pool
+- **Winner (1st place)**: Gets `half of starting pool` (not remaining pool!)
+
+**Example (4-player game, starting pool = 2400):**
+- 1st eliminated (3 remain): **0** → Pool: 2400
+- 2nd eliminated (2 remain): 2400 / (2×2) = **600** → Pool: 1800
+- 3rd eliminated (1 remain, 2nd place): 1800 / (2×1) = **900** → Pool: 900
+- Winner (1st place): 2400 / 2 = **1200** → Pool: -300 (deficit)
+
+**This ensures:**
+- 1st eliminated: 0 (0%)
+- 2nd place gets: 900 (37.5% of starting pool)
+- Winner gets: 1200 (50% of starting pool)
+
+### PLAYER_BANKRUPT
+
+Broadcasted when a player is declared bankrupt (cannot pay rent and has no properties to sell).
+
+```json
+{
+    "type": "PLAYER_BANKRUPT",
+    "playerId": "player-uuid",
+    "playerName": "John Doe",
+    "creditorId": "creditor-uuid",
+    "creditorName": "Jane Smith",
+    "players": [...],
+    "rewardAmount": 600,
+    "eliminationOrder": 2
+}
+```
+
+**Automatic Bankruptcy Conditions:**
+- Player cannot afford to pay rent (including 1% fee)
+- Player has no properties to sell (`ownedBlocks` is empty)
+- Player receives reward based on finishing position
+- Player is automatically removed from the game
+- If only 1 player remains, game ends with that player as winner
 
 ### CORNER_BLOCK_EFFECT
 
@@ -393,18 +452,21 @@ Broadcasted when a player disconnects from the game.
 
 ### GAME_ENDED
 
-Broadcasted when the game ends (player wins, insufficient players, timeout).
+Broadcasted when the game ends (only 1 player remaining).
 
 ```json
 {
     "type": "GAME_ENDED",
     "reason": "player_won",
     "winnerId": "player-uuid",
-    "prizeDistribution": [],
-    "distributionSuccess": false,
-    "finalPoolBalance": "0"
+    "winnerName": "John Doe",
+    "winnerReward": 1200,
+    "remainingPool": -300,
+    "players": [...]
 }
 ```
+
+**Note:** The winner receives **half of the starting pool** (not remaining pool). In a 4-player game (pool=2400), winner gets 1200. This may result in a negative remaining pool if total payouts exceed the starting pool.
 
 ### ERROR
 
@@ -472,7 +534,15 @@ The game board consists of 14 spaces:
 7. **Corner Blocks:** Have special effects (gain/lose money, move to jail)
 8. **Passing GO:** Collect $70 when passing or landing on GO
 9. **Property Sales:** Players can sell properties for half the purchase price minus fees
-10. **Game End:** Game ends when a player wins or insufficient players remain
+10. **Bankruptcy:** Players who cannot pay rent and have no properties are automatically declared bankrupt and removed from the game
+11. **Reward Pool:** Total pool = `numberOfPlayers × 600`. Uses temporary pool for reward calculations
+12. **Reward Distribution:**
+    - **1st eliminated**: Gets nothing (0)
+    - **2nd+ eliminated** (including 2nd place): Gets `tempPool / (2 × playersRemaining)` using calculation pool
+    - **Winner (1st place)**: Gets **half of starting pool** (fixed amount)
+    - In 4-player game: 1st out gets 0, 2nd place gets 900 (37.5%), winner gets 1200 (50%)
+    - Total payouts may exceed pool (resulting in negative remaining balance)
+13. **Game End:** Game ends when only 1 player remains (winner) or all players disconnect
 
 ## Connection Lifecycle
 

@@ -216,14 +216,11 @@ class MonopolyServer {
         game.startGame();
         const currentPlayer = game.getCurrentPlayer();
 
-        // Get pool balance (disabled - no NEAR integration)
-        const poolBalance = '0';
-
         this.broadcastToGame(gameId, {
             type: 'GAME_STARTED',
             currentPlayer: currentPlayer ? PlayerManager.sanitizePlayer(currentPlayer) : null,
             players: game.getAllSanitizedPlayers(),
-            poolBalance: poolBalance
+            totalPool: game.totalPool
         });
     }
 
@@ -327,15 +324,106 @@ class MonopolyServer {
 
             this.nextTurn(game);
         } else if (paymentResult.insufficientFunds) {
-            game.setPendingRent({ amount: paymentResult.rentAmount, ownerId: owner.id, block: block });
+            // Check if player has properties to sell
+            if (player.ownedBlocks.length === 0) {
+                // Player is bankrupt - no properties to sell
+                this.handleBankruptcy(game, player, owner);
+            } else {
+                // Player has properties - give them a chance to sell
+                game.setPendingRent({ amount: paymentResult.rentAmount, ownerId: owner.id, block: block });
 
-            this.sendToPlayer(player.webSocketLink, {
-                type: 'INSUFFICIENT_FUNDS',
-                rentAmount: paymentResult.rentAmount,
-                currentMoney: player.poolAmt,
-                ownedProperties: player.ownedBlocks,
-                message: 'You must sell properties to pay rent or declare bankruptcy'
+                this.sendToPlayer(player.webSocketLink, {
+                    type: 'INSUFFICIENT_FUNDS',
+                    rentAmount: paymentResult.rentAmount,
+                    currentMoney: player.poolAmt,
+                    ownedProperties: player.ownedBlocks,
+                    message: 'You must sell properties to pay rent or declare bankruptcy'
+                });
+            }
+        }
+    }
+
+    handleBankruptcy(game: GameRoom, bankruptPlayer: Player, creditor: Player) {
+        // Calculate reward based on position
+        const playersEliminated = game.initialPlayerCount - game.players.length + 1; // +1 for current player being eliminated
+        const playersRemaining = game.players.length - 1;
+
+        let reward = 0;
+
+        // First player eliminated gets NOTHING (0 reward)
+        if (playersEliminated === 1) {
+            reward = 0;
+        }
+        // All subsequent eliminations (including last eliminated/2nd place) get tempPool / (2 * playersRemaining)
+        else {
+            reward = game.tempPool / (2 * playersRemaining);
+        }
+
+        // Deduct reward from tempPool for calculation tracking
+        game.tempPool -= reward;
+
+        // Deduct reward from actual totalPool
+        game.totalPool -= reward;
+
+        // Broadcast reward received (if any)
+        if (reward > 0) {
+            this.broadcastToGame(game.id, {
+                type: 'REWARDS_RECEIVED',
+                playerId: bankruptPlayer.id,
+                playerName: bankruptPlayer.name,
+                rewardAmount: Math.floor(reward),
+                eliminationOrder: playersEliminated,
+                remainingPool: Math.floor(game.totalPool)
             });
+        }
+
+        // Remove player from game
+        const removed = game.removePlayer(bankruptPlayer.id);
+
+        if (!removed) {
+            return;
+        }
+
+        // Broadcast bankruptcy
+        this.broadcastToGame(game.id, {
+            type: 'PLAYER_BANKRUPT',
+            playerId: bankruptPlayer.id,
+            playerName: bankruptPlayer.name,
+            creditorId: creditor.id,
+            creditorName: creditor.name,
+            players: game.getAllSanitizedPlayers(),
+            rewardAmount: Math.floor(reward),
+            eliminationOrder: playersEliminated
+        });
+
+        // Clear pending rent
+        game.clearPendingRent();
+
+        // Check if game should end (only 1 player left)
+        if (game.players.length === 1) {
+            const winner = game.players[0];
+
+            // Calculate starting pool value
+            const startingPoolValue = game.initialPlayerCount * 600;
+
+            // Winner gets HALF of starting pool
+            const winnerReward = startingPoolValue / 2;
+
+            // Deduct from actual pool
+            game.totalPool -= winnerReward;
+
+            this.broadcastToGame(game.id, {
+                type: 'GAME_ENDED',
+                reason: 'player_won',
+                winnerId: winner.id,
+                winnerName: winner.name,
+                winnerReward: Math.floor(winnerReward),
+                remainingPool: Math.floor(game.totalPool),
+                players: game.getAllSanitizedPlayers()
+            });
+        } else {
+            // Continue game with next turn
+            this.nextTurn(game);
         }
     }
 
@@ -497,7 +585,6 @@ class MonopolyServer {
                     await this.endGame(gameId, 'insufficient_players');
                 } else if (game.isGameEmpty()) {
                     this.games.delete(gameId);
-                    this.gameRounds.delete(gameId);
                 }
             }
 
@@ -528,7 +615,6 @@ class MonopolyServer {
 
         // Cleanup
         this.games.delete(gameId);
-        this.gameRounds.delete(gameId);
 
         // Close all connections for this game
         for (const [ws, connection] of this.playerConnections.entries()) {

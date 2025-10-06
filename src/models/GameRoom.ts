@@ -12,6 +12,9 @@ export class GameRoom implements GameState {
     public pendingRent: PendingRent | null;
     public board: Block[];
     public creatorId: string | null;
+    public totalPool: number;
+    public tempPool: number;
+    public initialPlayerCount: number;
     private boardManager: Board;
 
     constructor(id: string) {
@@ -23,6 +26,9 @@ export class GameRoom implements GameState {
         this.pendingBlock = null;
         this.pendingRent = null;
         this.creatorId = null;
+        this.totalPool = 0;
+        this.tempPool = 0;
+        this.initialPlayerCount = 0;
         this.boardManager = new Board();
         this.board = this.boardManager.getBoard();
     }
@@ -66,6 +72,17 @@ export class GameRoom implements GameState {
 
         this.gameStarted = true;
         this.currentPlayerIndex = 0;
+
+        // Store initial player count for reward calculations
+        this.initialPlayerCount = this.players.length;
+
+        // Initialize total pool: players * (starting amount + 100)
+        // Starting amount is 500 (from PlayerManager)
+        this.totalPool = this.players.length * (500 + 100);
+
+        // Initialize temp pool for reward calculations (same as total pool)
+        this.tempPool = this.totalPool;
+
         return true;
     }
 
@@ -171,7 +188,10 @@ export class GameRoom implements GameState {
             waitingForAction: this.waitingForAction,
             pendingBlock: this.pendingBlock,
             pendingRent: this.pendingRent,
-            board: this.board
+            board: this.board,
+            totalPool: this.totalPool,
+            tempPool: this.tempPool,
+            initialPlayerCount: this.initialPlayerCount
         };
     }
 
