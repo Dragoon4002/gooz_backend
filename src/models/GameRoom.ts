@@ -11,6 +11,7 @@ export class GameRoom implements GameState {
     public pendingBlock: Block | null;
     public pendingRent: PendingRent | null;
     public board: Block[];
+    public creatorId: string | null;
     private boardManager: Board;
 
     constructor(id: string) {
@@ -21,6 +22,7 @@ export class GameRoom implements GameState {
         this.waitingForAction = false;
         this.pendingBlock = null;
         this.pendingRent = null;
+        this.creatorId = null;
         this.boardManager = new Board();
         this.board = this.boardManager.getBoard();
     }
@@ -32,6 +34,11 @@ export class GameRoom implements GameState {
 
         if (this.gameStarted) {
             return false; // Game already started
+        }
+
+        // Set creator as first player
+        if (this.players.length === 0) {
+            this.creatorId = player.id;
         }
 
         this.players.push(player);
@@ -170,5 +177,9 @@ export class GameRoom implements GameState {
 
     canStartGame(): boolean {
         return !this.gameStarted && this.hasMinimumPlayers();
+    }
+
+    isCreator(playerId: string): boolean {
+        return this.creatorId === playerId;
     }
 }

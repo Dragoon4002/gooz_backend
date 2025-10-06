@@ -54,7 +54,7 @@ export interface GameMessage {
 }
 
 export interface ClientMessage {
-    type: 'CREATE_GAME' | 'JOIN_GAME' | 'ROLL_DICE' | 'BUY_PROPERTY' |
+    type: 'CREATE_GAME' | 'JOIN_GAME' | 'START_GAME' | 'ROLL_DICE' | 'BUY_PROPERTY' |
           'PASS_PROPERTY' | 'SELL_PROPERTY' | 'MESSAGE';
     gameId?: string;
     playerId?: string;

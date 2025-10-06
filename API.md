@@ -18,7 +18,7 @@ Messages sent from client to server:
 
 ```typescript
 interface ClientMessage {
-    type: 'CREATE_GAME' | 'JOIN_GAME' | 'ROLL_DICE' | 'BUY_PROPERTY' |
+    type: 'CREATE_GAME' | 'JOIN_GAME' | 'START_GAME' | 'ROLL_DICE' | 'BUY_PROPERTY' |
           'PASS_PROPERTY' | 'SELL_PROPERTY' | 'MESSAGE';
     gameId?: string;
     playerId?: string;      // Required for CREATE_GAME and JOIN_GAME
@@ -50,7 +50,7 @@ interface GameMessage {
 
 ### 1. CREATE_GAME
 
-Creates a new game room and adds the player as the first player.
+Creates a new game room and adds the player as the first player (game creator).
 
 **Request:**
 ```json
@@ -71,7 +71,7 @@ Creates a new game room and adds the player as the first player.
     "player": {
         "id": "player-uuid",
         "name": "John Doe",
-        "poolAmt": 1500,
+        "poolAmt": 500,
         "ownedBlocks": [],
         "colorCode": "#FF0000",
         "position": 0
@@ -104,30 +104,52 @@ Joins an existing game room.
     "player": {
         "id": "player-uuid-2",
         "name": "Jane Smith",
-        "poolAmt": 1500,
+        "poolAmt": 500,
         "ownedBlocks": [],
         "colorCode": "#00FF00",
         "position": 0
     },
     "players": [...],
-    "poolBalance": "0"
+    "poolBalance": "0",
+    "canStart": true,
+    "creatorId": "player-uuid"
 }
 ```
 
-**Auto-start Response (when 2+ players join):**
+**Note:** The `canStart` field indicates if the game has the minimum players (2) to start. The `creatorId` identifies who can start the game.
+
+### 3. START_GAME
+
+Starts the game (only the game creator can send this message). Requires at least 2 players.
+
+**Request:**
+```json
+{
+    "type": "START_GAME",
+    "gameId": "A1B2C3D4",
+    "playerId": "player-uuid"
+}
+```
+
+**Response (broadcasted to all players):**
 ```json
 {
     "type": "GAME_STARTED",
     "currentPlayer": {...},
     "players": [...],
-    "poolBalance": "0",
-    "gameSeed": "abc123..."
+    "poolBalance": "0"
 }
 ```
 
-### 3. ROLL_DICE
+**Errors:**
+- `"Game not found"` - Invalid gameId
+- `"Game already started"` - Game is already in progress
+- `"Only the game creator can start the game"` - Non-creator tried to start
+- `"Need at least 2 players to start"` - Insufficient players
 
-Rolls dice for the current player's turn.
+### 4. ROLL_DICE
+
+Rolls dice for the current player's turn. Uses basic random number generation (1-6).
 
 **Request:**
 ```json
@@ -143,8 +165,8 @@ Rolls dice for the current player's turn.
 {
     "type": "DICE_ROLLED",
     "playerId": "player-uuid",
-    "diceRoll": 7,
-    "newPosition": 7,
+    "diceRoll": 4,
+    "newPosition": 4,
     "landedBlock": {
         "name": "Mediterranean Avenue",
         "price": 60,
@@ -153,16 +175,13 @@ Rolls dice for the current player's turn.
         "owner": null,
         "cornerBlock": false
     },
-    "player": {...},
-    "randomnessProof": {
-        "round": 1,
-        "seed": "proof-seed",
-        "proof": "verification-proof"
-    }
+    "player": {...}
 }
 ```
 
-### 4. BUY_PROPERTY
+**Note:** Dice roll range is 1-6 using `Math.random()`.
+
+### 5. BUY_PROPERTY
 
 Buys the property the player landed on (if available for purchase). A transaction fee of 1% of the property price is automatically deducted from the player's funds.
 
@@ -189,7 +208,12 @@ Buys the property the player landed on (if available for purchase). A transactio
 
 **Note:** The player pays the property price plus a 1% transaction fee (e.g., $60 property costs $60.60 total).
 
-### 5. PASS_PROPERTY
+**Errors:**
+- `"No pending action or not your turn"` - No property to buy or wrong turn
+- `"Invalid request"` - Missing player or block data
+- `"Cannot buy property"` - Insufficient funds
+
+### 6. PASS_PROPERTY
 
 Declines to buy the property the player landed on.
 
@@ -211,7 +235,7 @@ Declines to buy the property the player landed on.
 }
 ```
 
-### 6. SELL_PROPERTY
+### 7. SELL_PROPERTY
 
 Sells a property owned by the player. The player receives 50% of the original purchase price minus a 1% transaction fee.
 
@@ -239,7 +263,7 @@ Sells a property owned by the player. The player receives 50% of the original pu
 
 **Note:** The player receives the sell price minus a 1% transaction fee (e.g., selling a $60 property gives $30 - $0.30 = $29.70).
 
-### 7. MESSAGE
+### 8. MESSAGE
 
 Sends a chat message to all players in the game.
 
@@ -281,7 +305,7 @@ Sent to a player when they land on an unowned property.
         "owner": null,
         "cornerBlock": false
     },
-    "playerMoney": 1500
+    "playerMoney": 500
 }
 ```
 
@@ -333,13 +357,13 @@ Broadcasted when a player lands on a corner block (GO, Jail, Free Parking, Go to
 
 ### PASSED_GO
 
-Broadcasted when a player passes or lands on GO.
+Broadcasted when a player passes or lands on GO. Players receive $70.
 
 ```json
 {
     "type": "PASSED_GO",
     "playerId": "player-uuid",
-    "amount": 200
+    "amount": 70
 }
 ```
 
@@ -403,7 +427,7 @@ interface SanitizedPlayer {
     poolAmt: number;      // Current money amount
     ownedBlocks: string[]; // Array of owned property names
     colorCode: string;    // Player's color (hex code)
-    position: number;     // Current position on board (0-20)
+    position: number;     // Current position on board (0-13)
 }
 ```
 
@@ -423,40 +447,42 @@ interface Block {
 
 ## Game Board
 
-The game board consists of 21 spaces:
+The game board consists of 14 spaces:
 
 **Corner Blocks (special effects):**
 - Position 0: GO (collect $100)
-- Position 5: Jail (lose $100)
-- Position 10: Free Parking (lose $100)
-- Position 15: Go to Jail (move to jail, lose $100)
+- Position 4: Jail (lose $100)
+- Position 7: Free Parking (lose $100)
+- Position 11: Go to Jail (move to position 4, lose $100)
 
 **Properties (can be bought/sold):**
-- Positions 1-4: Mediterranean Ave, Baltic Ave, Oriental Ave, Vermont Ave
-- Positions 6-9: St. Charles Place, Electric Company, States Ave, Virginia Ave
-- Positions 11-14: St. James Place, Tennessee Ave, New York Ave, Kentucky Ave
-- Positions 16-19: Atlantic Ave, Ventnor Ave, Water Works, Marvin Gardens
+- Positions 1-3: Mediterranean Avenue ($60), Baltic Avenue ($60), Oriental Avenue ($100)
+- Positions 5-6: Vermont Avenue ($100), Virginia Avenue ($160)
+- Positions 8-10: St. James Place ($180), Tennessee Avenue ($180), New York Avenue ($200)
+- Positions 12-13: Kentucky Avenue ($220), Marvin Gardens ($280)
 
 ## Game Rules
 
-1. **Starting:** Each player starts with $1500 and begins at position 0 (GO)
-2. **Turns:** Players take turns rolling dice (2-12 range) and moving clockwise
-3. **Properties:** Landing on unowned properties triggers BUY_OR_PASS decision
-4. **Rent:** Landing on owned properties requires rent payment to owner
-5. **Transaction Fees:** All property transactions (buy/sell) and rent payments incur a 1% fee
-6. **Corner Blocks:** Have special effects (gain/lose money, move to jail)
-7. **Passing GO:** Collect $200 when passing or landing on GO
-8. **Property Sales:** Players can sell properties for half the purchase price minus fees
-9. **Game End:** Game ends when a player wins or insufficient players remain
+1. **Starting:** Each player starts with $500 and begins at position 0 (GO)
+2. **Manual Start:** Game creator must manually start the game after 2-4 players join
+3. **Turns:** Players take turns rolling dice (1-6 range) and moving clockwise
+4. **Properties:** Landing on unowned properties triggers BUY_OR_PASS decision
+5. **Rent:** Landing on owned properties requires rent payment to owner
+6. **Transaction Fees:** All property transactions (buy/sell) and rent payments incur a 1% fee
+7. **Corner Blocks:** Have special effects (gain/lose money, move to jail)
+8. **Passing GO:** Collect $70 when passing or landing on GO
+9. **Property Sales:** Players can sell properties for half the purchase price minus fees
+10. **Game End:** Game ends when a player wins or insufficient players remain
 
 ## Connection Lifecycle
 
 1. **Connect:** Client establishes WebSocket connection
 2. **Create/Join:** Client creates new game or joins existing game
-3. **Game Start:** Auto-starts when 2+ players join
-4. **Gameplay:** Players take turns rolling dice and making decisions
-5. **Game End:** Game ends with winner announcement or player disconnection
-6. **Cleanup:** Server cleans up game data and closes connections
+3. **Wait:** Players wait for game creator to start (2-4 players required)
+4. **Game Start:** Creator sends START_GAME message to begin
+5. **Gameplay:** Players take turns rolling dice and making decisions
+6. **Game End:** Game ends with winner announcement or player disconnection
+7. **Cleanup:** Server cleans up game data and closes connections
 
 ## Error Handling
 
@@ -466,17 +492,44 @@ Common error messages:
 - `"Game already started"` - Attempting to join a game in progress
 - `"Player ID is required"` - Missing playerId in CREATE_GAME or JOIN_GAME
 - `"Player ID already exists in this game"` - Duplicate playerId in the same game
+- `"Only the game creator can start the game"` - Non-creator tried to start
+- `"Need at least 2 players to start"` - Insufficient players to start game
 - `"Player not found"` - Invalid playerId for current game
 - `"Not your turn or complete current action first"` - Invalid turn action
+- `"No pending action or not your turn"` - Trying to buy/pass without pending action
 - `"Cannot buy property"` - Insufficient funds or property not available
 - `"Property not owned or cannot sell"` - Invalid sell attempt
 - `"Invalid JSON format"` - Malformed message sent to server
+
+## Game Flow Example
+
+1. **Player 1 creates game:**
+   - Sends `CREATE_GAME` → Receives `GAME_CREATED`
+
+2. **Player 2 joins:**
+   - Sends `JOIN_GAME` → All receive `PLAYER_JOINED` with `canStart: true`
+
+3. **Player 1 starts game:**
+   - Sends `START_GAME` → All receive `GAME_STARTED`
+
+4. **Player 1's turn:**
+   - Sends `ROLL_DICE` → All receive `DICE_ROLLED`
+   - Lands on unowned property → Receives `BUY_OR_PASS`
+   - Sends `BUY_PROPERTY` → All receive `PROPERTY_BOUGHT`
+   - All receive `NEXT_TURN` for Player 2
+
+5. **Player 2's turn:**
+   - Sends `ROLL_DICE` → All receive `DICE_ROLLED`
+   - Lands on Player 1's property → All receive `RENT_PAID`
+   - All receive `NEXT_TURN` for Player 1
 
 ## Notes
 
 - **Blockchain Features:** NEAR integration is currently disabled
 - **Maximum Players:** 4 players per game
-- **Automatic Start:** Games start automatically when 2+ players join
-- **Verifiable Randomness:** Dice rolls use cryptographic randomness with proof
+- **Minimum Players:** 2 players required to start
+- **Manual Start:** Game creator must manually start the game
+- **Random Generation:** Dice rolls use basic `Math.random()` (1-6)
 - **Real-time Updates:** All game events are broadcasted to relevant players
 - **Connection Management:** Server handles player disconnections gracefully
+- **Creator Tracking:** First player to join is designated as the game creator

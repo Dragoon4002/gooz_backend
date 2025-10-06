@@ -9,7 +9,7 @@ export class PlayerManager {
             id: playerId || PlayerManager.generatePlayerId(),
             name: name,
             webSocketLink: webSocket,
-            poolAmt: 1500,
+            poolAmt: 500,
             ownedBlocks: [],
             colorCode: colorCode || PlayerManager.generateRandomColor(),
             position: 0

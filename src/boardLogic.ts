@@ -4,37 +4,19 @@ import { Player, Block, ClientMessage, GameMessage } from "./types";
 import { GameRoom } from "./models/GameRoom";
 import { PlayerManager } from "./managers/PlayerManager";
 import { PropertyManager } from "./managers/PropertyManager";
-// import { NEARIntegration } from "./nearIntegration";
-import { RandomnessService } from "./randomnessService";
-import { roll } from "./userfunctions/roll";
 
 class MonopolyServer {
     private wss: WebSocketServer;
     private games: Map<string, GameRoom>;
     private playerConnections: Map<WebSocket, { gameId: string; playerId: string; walletId?: string }>;
-    // private nearIntegration: NEARIntegration;
-    private randomnessService: RandomnessService;
-    private gameRounds: Map<string, number>; // Track rounds for verifiable randomness
 
     constructor(port = 8080) {
         this.wss = new WebSocketServer({ port });
         this.games = new Map();
         this.playerConnections = new Map();
-        this.gameRounds = new Map();
-        // this.nearIntegration = new NEARIntegration();
-        this.randomnessService = new RandomnessService(true); // Use Chainlink VRF
 
-        this.initializeServices();
         this.wss.on('connection', this.handleConnection.bind(this));
         console.log(`Monopoly WebSocket server running on port ${port}`);
-    }
-
-    private async initializeServices() {
-        // const nearInitialized = await this.nearIntegration.initialize();
-        // if (!nearInitialized) {
-        //     console.warn('NEAR integration failed to initialize - running without blockchain features');
-        // }
-        console.log('Running without NEAR blockchain integration');
     }
 
     handleConnection(ws: WebSocket) {
@@ -79,6 +61,9 @@ class MonopolyServer {
                     stakeAmount: payload.stakeAmount || '1',
                     playerId: playerId
                 });
+                break;
+            case 'START_GAME':
+                this.startGame(ws, gameId!, playerId!);
                 break;
             case 'ROLL_DICE':
                 this.rollDice(ws, gameId!, playerId!);
@@ -129,7 +114,6 @@ class MonopolyServer {
         }
 
         this.games.set(gameId, game);
-        this.gameRounds.set(gameId, 0);
         this.playerConnections.set(ws, { gameId, playerId: player.id, walletId });
 
         // Get initial pool balance (disabled - no NEAR integration)
@@ -201,24 +185,46 @@ class MonopolyServer {
             type: 'PLAYER_JOINED',
             player: PlayerManager.sanitizePlayer(player),
             players: game.getAllSanitizedPlayers(),
+            poolBalance: poolBalance,
+            canStart: game.canStartGame(),
+            creatorId: game.creatorId
+        });
+    }
+
+    async startGame(ws: WebSocket, gameId: string, playerId: string) {
+        const game = this.games.get(gameId);
+        if (!game) {
+            this.sendError(ws, 'Game not found');
+            return;
+        }
+
+        if (game.gameStarted) {
+            this.sendError(ws, 'Game already started');
+            return;
+        }
+
+        if (!game.isCreator(playerId)) {
+            this.sendError(ws, 'Only the game creator can start the game');
+            return;
+        }
+
+        if (!game.canStartGame()) {
+            this.sendError(ws, 'Need at least 2 players to start');
+            return;
+        }
+
+        game.startGame();
+        const currentPlayer = game.getCurrentPlayer();
+
+        // Get pool balance (disabled - no NEAR integration)
+        const poolBalance = '0';
+
+        this.broadcastToGame(gameId, {
+            type: 'GAME_STARTED',
+            currentPlayer: currentPlayer ? PlayerManager.sanitizePlayer(currentPlayer) : null,
+            players: game.getAllSanitizedPlayers(),
             poolBalance: poolBalance
         });
-
-        if (game.canStartGame()) {
-            game.startGame();
-            const currentPlayer = game.getCurrentPlayer();
-
-            // Generate initial game seed for verifiable randomness
-            const gameSeed = await this.randomnessService.generateGameSeed(gameId);
-
-            this.broadcastToGame(gameId, {
-                type: 'GAME_STARTED',
-                currentPlayer: currentPlayer ? PlayerManager.sanitizePlayer(currentPlayer) : null,
-                players: game.getAllSanitizedPlayers(),
-                poolBalance: poolBalance,
-                gameSeed: gameSeed.substring(0, 16) + '...' // Only show partial seed
-            });
-        }
     }
 
     async rollDice(ws: WebSocket, gameId: string, playerId: string) {
@@ -239,22 +245,8 @@ class MonopolyServer {
             return;
         }
 
-        // Increment round counter
-        const currentRound = this.gameRounds.get(gameId) || 0;
-        this.gameRounds.set(gameId, currentRound + 1);
-
-        // Get all player IDs for verifiable randomness
-        const playerIds = game.players.map(p => p.id);
-
-        // Use verifiable randomness service for proof/seed
-        const randomResult = await this.randomnessService.getVerifiableRandom(
-            gameId,
-            currentRound + 1,
-            playerIds
-        );
-
-        // But use the roll() function for the actual dice value
-        const diceRoll = await roll();
+        // Use basic random function for dice roll (1-6)
+        const diceRoll = Math.floor(Math.random() * 6) + 1;
         const moveResult = PlayerManager.movePlayer(currentPlayer, diceRoll, game.getBoardLength());
         const landedBlock = game.getBlockAtPosition(moveResult.newPosition);
 
@@ -265,11 +257,11 @@ class MonopolyServer {
 
         // Handle pass GO with money from pool
         if (moveResult.passedGo) {
-            PlayerManager.collectPassGoMoney(currentPlayer, 200);
+            PlayerManager.collectPassGoMoney(currentPlayer, 70);
             this.broadcastToGame(gameId, {
                 type: 'PASSED_GO',
                 playerId: playerId,
-                amount: 200
+                amount: 70
             });
 
             // In a real implementation, this would come from the prize pool
@@ -282,12 +274,7 @@ class MonopolyServer {
             diceRoll: diceRoll,
             newPosition: moveResult.newPosition,
             landedBlock: landedBlock,
-            player: PlayerManager.sanitizePlayer(currentPlayer),
-            randomnessProof: {
-                round: currentRound + 1,
-                seed: randomResult.seed,
-                proof: randomResult.proof
-            }
+            player: PlayerManager.sanitizePlayer(currentPlayer)
         });
 
         this.handleLanding(game, currentPlayer, landedBlock);
