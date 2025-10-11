@@ -5,7 +5,8 @@ import { GameRoom } from "./models/GameRoom";
 import { PlayerManager } from "./managers/PlayerManager";
 import { PropertyManager } from "./managers/PropertyManager";
 import { JAIL_ESCAPE_PAYMENT, JAIL_ESCAPE_DICE_THRESHOLD, PASS_GO_AMOUNT, INITIAL_PLAYER_MONEY, MIN_PLAYERS } from "./constants";
-import { distributePrizes } from "./contract/contractFunction";
+// COMMENTED OUT FOR TESTING - Re-enable when ready for blockchain integration
+// import { distributePrizes } from "./contract/contractFunction";
 
 class MonopolyServer {
     private wss: WebSocketServer;
@@ -94,13 +95,47 @@ class MonopolyServer {
         stakeAmount?: string;
         playerId?: string;
     }) {
-        const gameId = this.generateGameId();
-        const game = new GameRoom(gameId);
-
         if (!playerId) {
             this.sendError(ws, 'Player ID is required');
             return;
         }
+
+        // Check if player is trying to create a new game while already in one (reconnection)
+        const existingConnection = Array.from(this.playerConnections.entries()).find(
+            ([_, data]) => data.playerId === playerId
+        );
+
+        if (existingConnection) {
+            const [oldWs, { gameId: existingGameId }] = existingConnection;
+            const existingGame = this.games.get(existingGameId);
+
+            if (existingGame) {
+                console.log(`♻️  Player ${playerId} reconnecting to existing game ${existingGameId}`);
+                const existingPlayer = existingGame.getPlayerById(playerId);
+
+                if (existingPlayer) {
+                    // Update WebSocket reference
+                    existingPlayer.webSocketLink = ws;
+                    this.playerConnections.delete(oldWs);
+                    this.playerConnections.set(ws, { gameId: existingGameId, playerId });
+
+                    // Send game state to reconnected creator
+                    this.sendToPlayer(ws, {
+                        type: 'GAME_CREATED',
+                        gameId: existingGameId,
+                        playerId: playerId,
+                        player: PlayerManager.sanitizePlayer(existingPlayer),
+                        board: existingGame.board,
+                        poolBalance: '0',
+                        playerStake: stakeAmount || '0'
+                    });
+                    return;
+                }
+            }
+        }
+
+        const gameId = this.generateGameId();
+        const game = new GameRoom(gameId);
 
         // Note: Player must deposit from their own wallet via frontend before joining
         // Backend just manages game state, doesn't handle deposits
@@ -157,9 +192,60 @@ class MonopolyServer {
             return;
         }
 
-        if (PlayerManager.isPlayerIdDuplicate(game.players, playerId)) {
-            this.sendError(ws, 'Player ID already exists in this game');
+        // Check if player is already in THIS game (reconnection scenario)
+        const existingPlayerInThisGame = game.getPlayerById(playerId);
+        if (existingPlayerInThisGame) {
+            console.log(`♻️  Player ${playerId} reconnecting to game ${gameId} - updating WebSocket reference`);
+            // Update the WebSocket reference for reconnected player
+            existingPlayerInThisGame.webSocketLink = ws;
+            this.playerConnections.set(ws, { gameId, playerId: playerId });
+
+            // Send current game state to reconnected player
+            this.sendToPlayer(ws, {
+                type: 'PLAYER_JOINED',
+                gameId: gameId,  // Include gameId for frontend sync
+                player: PlayerManager.sanitizePlayer(existingPlayerInThisGame),
+                players: game.getAllSanitizedPlayers(),
+                poolBalance: '0',
+                canStart: game.canStartGame(),
+                creatorId: game.creatorId
+            });
             return;
+        }
+
+        // Check if player is in a DIFFERENT game (need to move them)
+        const existingConnection = Array.from(this.playerConnections.entries()).find(
+            ([_, data]) => data.playerId === playerId
+        );
+
+        if (existingConnection) {
+            const [oldWs, { gameId: oldGameId }] = existingConnection;
+            if (oldGameId !== gameId) {
+                console.log(`🔄 Moving player ${playerId} from game ${oldGameId} to game ${gameId}`);
+
+                // Remove from old game
+                const oldGame = this.games.get(oldGameId);
+                if (oldGame) {
+                    const playerToRemove = oldGame.getPlayerById(playerId);
+                    const wasRemoved = oldGame.removePlayer(playerId);
+                    if (wasRemoved && playerToRemove) {
+                        console.log(`   ✓ Removed from old game ${oldGameId}`);
+                        // Notify remaining players in old game
+                        this.broadcastToGame(oldGameId, {
+                            type: 'PLAYER_LEFT',
+                            playerId: playerId,
+                            playerName: playerToRemove.name,
+                            players: oldGame.getAllSanitizedPlayers()
+                        });
+                    }
+                }
+
+                // Clean up old connection
+                this.playerConnections.delete(oldWs);
+                if (oldWs !== ws && oldWs.readyState === oldWs.OPEN) {
+                    oldWs.close();
+                }
+            }
         }
 
         // Note: Player must deposit from their own wallet via frontend before joining
@@ -180,6 +266,7 @@ class MonopolyServer {
 
         this.broadcastToGame(gameId, {
             type: 'PLAYER_JOINED',
+            gameId: gameId,  // Include gameId so frontend can update
             player: PlayerManager.sanitizePlayer(player),
             players: game.getAllSanitizedPlayers(),
             poolBalance: poolBalance,
@@ -483,19 +570,21 @@ class MonopolyServer {
             ];
 
             // Call smart contract to distribute prizes (uses game.id as string, converted to bytes32 internally)
-            const result = await distributePrizes(game.id, rankedPlayers);
+            // COMMENTED OUT FOR TESTING - Re-enable when ready for blockchain integration
+            // const result = await distributePrizes(game.id, rankedPlayers);
 
-            console.log(`✅ Prize distribution successful!`);
-            console.log(`   Transaction: ${result.transactionHash}`);
-            console.log(`   Block: ${result.blockNumber}`);
+            console.log(`⚠️  Prize distribution SKIPPED (blockchain disabled for testing)`);
+            // console.log(`✅ Prize distribution successful!`);
+            // console.log(`   Transaction: ${result.transactionHash}`);
+            // console.log(`   Block: ${result.blockNumber}`);
 
-            if (result.failedTransfers && result.failedTransfers.length > 0) {
-                console.warn(`   ⚠️  ${result.failedTransfers.length} transfer(s) failed - manual resolution required\n`);
-            } else {
-                console.log(`   ✅ All transfers successful\n`);
-            }
+            // if (result.failedTransfers && result.failedTransfers.length > 0) {
+            //     console.warn(`   ⚠️  ${result.failedTransfers.length} transfer(s) failed - manual resolution required\n`);
+            // } else {
+            //     console.log(`   ✅ All transfers successful\n`);
+            // }
 
-            return result;
+            return null; // Skip blockchain distribution for testing
         } catch (error) {
             console.error('❌ Prize distribution failed:', error);
             // Don't throw - game should still end even if distribution fails
@@ -833,11 +922,16 @@ class MonopolyServer {
     broadcastToGame(gameId: string, message: GameMessage) {
         const game = this.games.get(gameId);
         if (game) {
+            let sentCount = 0;
             game.players.forEach(player => {
                 if (player.webSocketLink.readyState === WebSocket.OPEN) {
                     player.webSocketLink.send(JSON.stringify(message));
+                    sentCount++;
                 }
             });
+            if (message.type === 'MESSAGE') {
+                console.log(`   ✅ Broadcast complete: sent to ${sentCount}/${game.players.length} players`);
+            }
         }
     }
 
@@ -853,6 +947,12 @@ class MonopolyServer {
             this.sendError(ws, 'Player not found');
             return;
         }
+
+        console.log(`💬 Chat message from ${player.name} (${playerId}): "${message}"`);
+        console.log(`   Broadcasting to ${game.players.length} players in game ${gameId}`);
+        game.players.forEach((p, idx) => {
+            console.log(`   [${idx}] ${p.name} (${p.id}) - WebSocket ${p.webSocketLink.readyState === WebSocket.OPEN ? 'OPEN' : 'CLOSED'}`);
+        });
 
         this.broadcastToGame(gameId, {
             type: 'MESSAGE',
