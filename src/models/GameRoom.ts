@@ -1,6 +1,7 @@
-import { Player, Block, PendingRent, GameState } from "../types";
+import { Player, Block, PendingRent, GameState, PlayerRanking } from "../types";
 import { Board } from "./Board";
 import { PlayerManager } from "../managers/PlayerManager";
+import { INITIAL_PLAYER_MONEY, MAX_PLAYERS, MIN_PLAYERS } from "../constants";
 
 export class GameRoom implements GameState {
     public id: string;
@@ -15,6 +16,7 @@ export class GameRoom implements GameState {
     public totalPool: number;
     public tempPool: number;
     public initialPlayerCount: number;
+    public playerRankings: PlayerRanking[];
     private boardManager: Board;
 
     constructor(id: string) {
@@ -29,12 +31,13 @@ export class GameRoom implements GameState {
         this.totalPool = 0;
         this.tempPool = 0;
         this.initialPlayerCount = 0;
+        this.playerRankings = [];
         this.boardManager = new Board();
         this.board = this.boardManager.getBoard();
     }
 
     addPlayer(player: Player): boolean {
-        if (this.players.length >= 4) {
+        if (this.players.length >= MAX_PLAYERS) {
             return false; // Game is full
         }
 
@@ -65,8 +68,30 @@ export class GameRoom implements GameState {
         return false;
     }
 
+    eliminatePlayer(playerId: string): void {
+        // Assign rank based on remaining players + 1 (for eliminated player)
+        const rank = this.players.length;
+
+        // Add to rankings if not already ranked
+        if (!this.playerRankings.find(r => r.playerId === playerId)) {
+            this.playerRankings.push({ playerId, rank });
+        }
+
+        // Remove player from active players
+        this.removePlayer(playerId);
+    }
+
+    getPlayerRanking(playerId: string): number | null {
+        const ranking = this.playerRankings.find(r => r.playerId === playerId);
+        return ranking ? ranking.rank : null;
+    }
+
+    getAllRankings(): PlayerRanking[] {
+        return [...this.playerRankings];
+    }
+
     startGame(): boolean {
-        if (this.players.length < 2 || this.gameStarted) {
+        if (this.players.length < MIN_PLAYERS || this.gameStarted) {
             return false;
         }
 
@@ -77,8 +102,7 @@ export class GameRoom implements GameState {
         this.initialPlayerCount = this.players.length;
 
         // Initialize total pool: players * (starting amount + 100)
-        // Starting amount is 500 (from PlayerManager)
-        this.totalPool = this.players.length * (500 + 100);
+        this.totalPool = this.players.length * (INITIAL_PLAYER_MONEY + 100);
 
         // Initialize temp pool for reward calculations (same as total pool)
         this.tempPool = this.totalPool;
@@ -145,7 +169,7 @@ export class GameRoom implements GameState {
     }
 
     isGameFull(): boolean {
-        return this.players.length >= 4;
+        return this.players.length >= MAX_PLAYERS;
     }
 
     isGameEmpty(): boolean {
@@ -153,7 +177,7 @@ export class GameRoom implements GameState {
     }
 
     hasMinimumPlayers(): boolean {
-        return this.players.length >= 2;
+        return this.players.length >= MIN_PLAYERS;
     }
 
     getPlayerById(playerId: string): Player | undefined {
@@ -175,6 +199,7 @@ export class GameRoom implements GameState {
         this.waitingForAction = false;
         this.pendingBlock = null;
         this.pendingRent = null;
+        this.playerRankings = [];
         this.boardManager.resetBoard();
         this.board = this.boardManager.getBoard();
     }
@@ -191,7 +216,8 @@ export class GameRoom implements GameState {
             board: this.board,
             totalPool: this.totalPool,
             tempPool: this.tempPool,
-            initialPlayerCount: this.initialPlayerCount
+            initialPlayerCount: this.initialPlayerCount,
+            playerRankings: this.playerRankings
         };
     }
 

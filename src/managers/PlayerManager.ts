@@ -1,5 +1,6 @@
 import { WebSocket } from "ws";
 import { Player, Block, SanitizedPlayer, GameState } from "../types";
+import { DEFAULT_PLAYER_COLORS, INITIAL_PLAYER_MONEY, PROPERTY_SELL_RATE, TRANSACTION_FEE_RATE } from "../constants";
 
 const crypto = require('crypto');
 
@@ -9,10 +10,12 @@ export class PlayerManager {
             id: playerId || PlayerManager.generatePlayerId(),
             name: name,
             webSocketLink: webSocket,
-            poolAmt: 500,
+            poolAmt: INITIAL_PLAYER_MONEY || 500,
             ownedBlocks: [],
             colorCode: colorCode || PlayerManager.generateRandomColor(),
-            position: 0
+            position: 0,
+            inJail: false,
+            skipTurns: 0
         };
     }
 
@@ -21,7 +24,7 @@ export class PlayerManager {
     }
 
     static generateRandomColor(): string {
-        const colors = ['#FF0000', '#00FF00', '#0000FF', '#FFFF00', '#FF00FF', '#00FFFF'];
+        const colors = DEFAULT_PLAYER_COLORS;
         return colors[Math.floor(Math.random() * colors.length)];
     }
 
@@ -32,14 +35,16 @@ export class PlayerManager {
             poolAmt: player.poolAmt,
             ownedBlocks: player.ownedBlocks,
             colorCode: player.colorCode,
-            position: player.position
+            position: player.position,
+            inJail: player.inJail,
+            skipTurns: player.skipTurns
         };
     }
 
     static movePlayer(player: Player, diceRoll: number, boardLength: number): { newPosition: number; passedGo: boolean } {
         const oldPosition = player.position;
         const newPosition = (oldPosition + diceRoll) % boardLength;
-        const passedGo = newPosition < oldPosition || (oldPosition + diceRoll >= boardLength);
+        const passedGo = newPosition < oldPosition || (oldPosition + diceRoll >= boardLength || newPosition === 0);
 
         player.position = newPosition;
 
@@ -52,12 +57,12 @@ export class PlayerManager {
 
     static canAffordProperty(player: Player, block: Block): boolean {
         const price = block.price || 0;
-        const fee = Math.floor(price * 0.01);
+        const fee = Math.floor(price * TRANSACTION_FEE_RATE);
         return player.poolAmt >= (price + fee);
     }
 
     static canAffordRent(player: Player, rentAmount: number): boolean {
-        const fee = Math.floor(rentAmount * 0.01);
+        const fee = Math.floor(rentAmount * TRANSACTION_FEE_RATE);
         return player.poolAmt >= (rentAmount + fee);
     }
 
@@ -80,8 +85,8 @@ export class PlayerManager {
             return 0;
         }
 
-        const sellPrice = Math.floor((block.price || 0) / 2);
-        const fee = Math.floor(sellPrice * 0.01);
+        const sellPrice = Math.floor((block.price || 0) * PROPERTY_SELL_RATE);
+        const fee = Math.floor(sellPrice * TRANSACTION_FEE_RATE);
         const netAmount = sellPrice - fee;
         player.poolAmt += netAmount;
         player.ownedBlocks = player.ownedBlocks.filter(b => b !== block.name);
@@ -91,7 +96,7 @@ export class PlayerManager {
     }
 
     static payRent(payer: Player, owner: Player, amount: number): boolean {
-        const fee = Math.floor(amount * 0.01);
+        const fee = Math.floor(amount * TRANSACTION_FEE_RATE);
         const totalCost = amount + fee;
 
         if (payer.poolAmt < totalCost) {

@@ -1,4 +1,10 @@
 import { Block, Player } from "../types";
+import {
+    CORNER_BLOCKS,
+    BOARD_PROPERTIES,
+    REST_HOUSE_PAYMENT,
+    PARTY_HOUSE_COST
+} from "../constants";
 
 export class Board {
     private blocks: Block[];
@@ -11,23 +17,18 @@ export class Board {
         const board: Block[] = [
             // Corner 1 - GO (position 0)
             {
-                name: "GO",
-                imageURL: "/images/go.png",
+                name: CORNER_BLOCKS.GO.name,
+                imageURL: CORNER_BLOCKS.GO.imageURL,
                 cornerBlock: true,
                 cornerFunction: (player: Player) => {
-                    player.poolAmt += 100;
+                    // No action needed - money is collected when passing GO
+                    console.log(`${player.name} landed on GO!`);
                 }
             }
         ];
 
         // Side 1 - 3 properties (positions 1-3)
-        const side1Properties = [
-            { name: "Mediterranean Avenue", price: 60, rent: 10, imageURL: "/images/mediterranean.png" },
-            { name: "Baltic Avenue", price: 60, rent: 10, imageURL: "/images/baltic.png" },
-            { name: "Oriental Avenue", price: 100, rent: 15, imageURL: "/images/oriental.png" }
-        ];
-
-        side1Properties.forEach(prop => {
+        BOARD_PROPERTIES.SIDE_1.forEach(prop => {
             board.push({
                 ...prop,
                 owner: null,
@@ -35,23 +36,20 @@ export class Board {
             } as Block);
         });
 
-        // Corner 2 - Jail (position 4)
+        // Corner 2 - Rest House (position 4)
         board.push({
-            name: "Jail",
-            imageURL: "/images/jail.png",
+            name: CORNER_BLOCKS.REST_HOUSE.name,
+            imageURL: CORNER_BLOCKS.REST_HOUSE.imageURL,
             cornerBlock: true,
             cornerFunction: (player: Player) => {
-                player.poolAmt -= 100;
+                // Pay player and skip next turn
+                player.poolAmt += REST_HOUSE_PAYMENT;
+                player.skipTurns = 1;
             }
         });
 
-        // Side 2 - 3 properties (positions 5-6)
-        const side2Properties = [
-            { name: "Vermont Avenue", price: 100, rent: 15, imageURL: "/images/vermont.png" },
-            { name: "Virginia Avenue", price: 160, rent: 25, imageURL: "/images/virginia.png" }
-        ];
-
-        side2Properties.forEach(prop => {
+        // Side 2 - 2 properties (positions 5-6)
+        BOARD_PROPERTIES.SIDE_2.forEach(prop => {
             board.push({
                 ...prop,
                 owner: null,
@@ -59,24 +57,20 @@ export class Board {
             } as Block);
         });
 
-        // Corner 3 - Free Parking (position 7)
+        // Corner 3 - Jail (position 7)
         board.push({
-            name: "Free Parking",
-            imageURL: "/images/freeparking.png",
+            name: CORNER_BLOCKS.JAIL.name,
+            imageURL: CORNER_BLOCKS.JAIL.imageURL,
             cornerBlock: true,
             cornerFunction: (player: Player) => {
-                player.poolAmt -= 100;
+                // Player lands in jail - set jail status
+                player.inJail = true;
+                // Logic for pay or roll will be handled in boardLogic.ts
             }
         });
 
         // Side 3 - 3 properties (positions 8-10)
-        const side3Properties = [
-            { name: "St. James Place", price: 180, rent: 30, imageURL: "/images/stjames.png" },
-            { name: "Tennessee Avenue", price: 180, rent: 30, imageURL: "/images/tennessee.png" },
-            { name: "New York Avenue", price: 200, rent: 35, imageURL: "/images/newyork.png" }
-        ];
-
-        side3Properties.forEach(prop => {
+        BOARD_PROPERTIES.SIDE_3.forEach(prop => {
             board.push({
                 ...prop,
                 owner: null,
@@ -84,24 +78,19 @@ export class Board {
             } as Block);
         });
 
-        // Corner 4 - Go to Jail (position 11)
+        // Corner 4 - Party House (position 11)
         board.push({
-            name: "Go to Jail",
-            imageURL: "/images/gotojail.png",
+            name: CORNER_BLOCKS.PARTY_HOUSE.name,
+            imageURL: CORNER_BLOCKS.PARTY_HOUSE.imageURL,
             cornerBlock: true,
             cornerFunction: (player: Player) => {
-                player.position = 4; // Move to jail (updated position)
-                player.poolAmt -= 100;
+                // Pay to party
+                player.poolAmt -= PARTY_HOUSE_COST;
             }
         });
 
-        // Side 4 - 3 properties (positions 12-13)
-        const side4Properties = [
-            { name: "Kentucky Avenue", price: 220, rent: 40, imageURL: "/images/kentucky.png" },
-            { name: "Marvin Gardens", price: 280, rent: 55, imageURL: "/images/marvin.png" }
-        ];
-
-        side4Properties.forEach(prop => {
+        // Side 4 - 2 properties (positions 12-13)
+        BOARD_PROPERTIES.SIDE_4.forEach(prop => {
             board.push({
                 ...prop,
                 owner: null,

@@ -8,6 +8,8 @@ export interface Player {
     ownedBlocks: string[];
     colorCode: string;
     position: number;
+    inJail?: boolean;
+    skipTurns?: number;
 }
 
 export interface Block {
@@ -19,6 +21,11 @@ export interface Block {
     cornerBlock: boolean;
     cornerFunction?: (player: Player) => void;
     rentfunction?: () => number;
+}
+
+export interface PlayerRanking {
+    playerId: string;
+    rank: number;
 }
 
 export interface GameState {
@@ -33,6 +40,7 @@ export interface GameState {
     totalPool: number;
     tempPool: number;
     initialPlayerCount: number;
+    playerRankings: PlayerRanking[];
 }
 
 export interface PendingRent {
@@ -53,21 +61,22 @@ export interface GameMessage {
           'BUY_OR_PASS' | 'PROPERTY_BOUGHT' | 'PROPERTY_PASSED' | 'PROPERTY_SOLD' |
           'RENT_PAID' | 'CORNER_BLOCK_EFFECT' | 'NEXT_TURN' | 'INSUFFICIENT_FUNDS' |
           'ERROR' | 'PLAYER_DISCONNECTED' | 'PASSED_GO' | 'GAME_ENDED' | 'PLAYER_BANKRUPT' |
-          'REWARDS_RECEIVED' | 'CONNECTION_ESTABLISHED' | 'MESSAGE';
+          'REWARDS_RECEIVED' | 'CONNECTION_ESTABLISHED' | 'MESSAGE' | 'JAIL_CHOICE' |
+          'JAIL_ROLL_RESULT';
     [key: string]: any;
 }
 
 export interface ClientMessage {
     type: 'CREATE_GAME' | 'JOIN_GAME' | 'START_GAME' | 'ROLL_DICE' | 'BUY_PROPERTY' |
-          'PASS_PROPERTY' | 'SELL_PROPERTY' | 'MESSAGE';
+          'PASS_PROPERTY' | 'SELL_PROPERTY' | 'MESSAGE' | 'JAIL_CHOICE';
     gameId?: string;
     playerId?: string;
     playerName?: string;
     colorCode?: string;
     blockName?: string;
-    walletId?: string;
     stakeAmount?: string;
     message?: string;
+    jailChoice?: 'pay' | 'roll';
 }
 
 export interface SanitizedPlayer {
@@ -77,4 +86,6 @@ export interface SanitizedPlayer {
     ownedBlocks: string[];
     colorCode: string;
     position: number;
+    inJail?: boolean;
+    skipTurns?: number;
 }

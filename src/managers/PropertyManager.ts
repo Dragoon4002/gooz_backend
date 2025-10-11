@@ -1,5 +1,6 @@
 import { Player, Block } from "../types";
 import { PlayerManager } from "./PlayerManager";
+import { PROPERTY_SELL_RATE } from "../constants";
 
 export class PropertyManager {
     static handlePropertyLanding(player: Player, block: Block, players: Player[]): {
@@ -77,7 +78,7 @@ export class PropertyManager {
     }
 
     static calculatePropertyValue(block: Block): number {
-        return Math.floor((block.price || 0) / 2); // Sell for half price
+        return Math.floor((block.price || 0) * PROPERTY_SELL_RATE);
     }
 
     static getTotalPropertyValue(player: Player, blocks: Block[]): number {

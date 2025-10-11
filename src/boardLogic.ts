@@ -4,11 +4,13 @@ import { Player, Block, ClientMessage, GameMessage } from "./types";
 import { GameRoom } from "./models/GameRoom";
 import { PlayerManager } from "./managers/PlayerManager";
 import { PropertyManager } from "./managers/PropertyManager";
+import { JAIL_ESCAPE_PAYMENT, JAIL_ESCAPE_DICE_THRESHOLD, PASS_GO_AMOUNT, INITIAL_PLAYER_MONEY, MIN_PLAYERS } from "./constants";
+import { distributePrizes } from "./contract/contractFunction";
 
 class MonopolyServer {
     private wss: WebSocketServer;
     private games: Map<string, GameRoom>;
-    private playerConnections: Map<WebSocket, { gameId: string; playerId: string; walletId?: string }>;
+    private playerConnections: Map<WebSocket, { gameId: string; playerId: string }>;
 
     constructor(port = 8080) {
         this.wss = new WebSocketServer({ port });
@@ -21,7 +23,7 @@ class MonopolyServer {
 
     handleConnection(ws: WebSocket) {
         console.log('New client connected');
-        
+
         ws.on('message', (message: any) => {
             try {
                 const data = JSON.parse(message);
@@ -48,7 +50,6 @@ class MonopolyServer {
                 this.createGame(ws, {
                     playerName: payload.playerName!,
                     colorCode: payload.colorCode,
-                    walletId: payload.walletId,
                     stakeAmount: payload.stakeAmount || '1',
                     playerId: playerId
                 });
@@ -57,7 +58,6 @@ class MonopolyServer {
                 this.joinGame(ws, gameId!, {
                     playerName: payload.playerName!,
                     colorCode: payload.colorCode,
-                    walletId: payload.walletId,
                     stakeAmount: payload.stakeAmount || '1',
                     playerId: playerId
                 });
@@ -80,31 +80,31 @@ class MonopolyServer {
             case 'MESSAGE':
                 this.handleChatMessage(ws, gameId!, playerId!, payload.message!);
                 break;
+            case 'JAIL_CHOICE':
+                this.handleJailChoice(ws, gameId!, playerId!, payload.jailChoice!);
+                break;
             default:
                 this.sendError(ws, 'Unknown message type');
         }
     }
 
-    async createGame(ws: WebSocket, { playerName, colorCode, walletId, stakeAmount, playerId }: {
+    async createGame(ws: WebSocket, { playerName, colorCode, stakeAmount, playerId }: {
         playerName: string;
         colorCode?: string;
-        walletId?: string;
         stakeAmount?: string;
         playerId?: string;
     }) {
         const gameId = this.generateGameId();
         const game = new GameRoom(gameId);
 
-        // Handle staking if wallet is provided (disabled - no NEAR integration)
-        if (walletId && stakeAmount) {
-            console.log(`Player ${playerName} attempted to stake ${stakeAmount} tokens (disabled)`);
-            // For now, we'll continue without actual staking
-        }
-
         if (!playerId) {
             this.sendError(ws, 'Player ID is required');
             return;
         }
+
+        // Note: Player must deposit from their own wallet via frontend before joining
+        // Backend just manages game state, doesn't handle deposits
+        console.log(`Creating game for player ${playerId}...`);
 
         const player = PlayerManager.createPlayer(playerName, ws, colorCode || '#FF0000', playerId);
 
@@ -114,7 +114,7 @@ class MonopolyServer {
         }
 
         this.games.set(gameId, game);
-        this.playerConnections.set(ws, { gameId, playerId: player.id, walletId });
+        this.playerConnections.set(ws, { gameId, playerId: player.id });
 
         // Get initial pool balance (disabled - no NEAR integration)
         const poolBalance = '0';
@@ -130,10 +130,9 @@ class MonopolyServer {
         });
     }
 
-    async joinGame(ws: WebSocket, gameId: string, { playerName, colorCode, walletId, stakeAmount, playerId }: {
+    async joinGame(ws: WebSocket, gameId: string, { playerName, colorCode, stakeAmount, playerId }: {
         playerName: string;
         colorCode?: string;
-        walletId?: string;
         stakeAmount?: string;
         playerId?: string;
     }) {
@@ -163,11 +162,9 @@ class MonopolyServer {
             return;
         }
 
-        // Handle staking if wallet is provided (disabled - no NEAR integration)
-        if (walletId && stakeAmount) {
-            console.log(`Player ${playerName} attempted to stake ${stakeAmount} tokens (disabled)`);
-            // For now, we'll continue without actual staking
-        }
+        // Note: Player must deposit from their own wallet via frontend before joining
+        // Backend just manages game state, doesn't handle deposits
+        console.log(`Player ${playerId} joining game ${gameId}...`);
 
         const player = PlayerManager.createPlayer(playerName, ws, colorCode, playerId);
 
@@ -176,7 +173,7 @@ class MonopolyServer {
             return;
         }
 
-        this.playerConnections.set(ws, { gameId, playerId: player.id, walletId });
+        this.playerConnections.set(ws, { gameId, playerId: player.id });
 
         // Get updated pool balance (disabled - no NEAR integration)
         const poolBalance = '0';
@@ -242,6 +239,23 @@ class MonopolyServer {
             return;
         }
 
+        // Check if player needs to skip turn (from Rest House)
+        if (currentPlayer.skipTurns && currentPlayer.skipTurns > 0) {
+            currentPlayer.skipTurns -= 1;
+
+            this.broadcastToGame(gameId, {
+                type: 'CORNER_BLOCK_EFFECT',
+                playerId: playerId,
+                blockName: 'Rest House',
+                amountChange: 0,
+                player: PlayerManager.sanitizePlayer(currentPlayer),
+                message: `${currentPlayer.name} is resting and skips this turn`
+            });
+
+            this.nextTurn(game);
+            return;
+        }
+
         // Use basic random function for dice roll (1-6)
         const diceRoll = Math.floor(Math.random() * 6) + 1;
         const moveResult = PlayerManager.movePlayer(currentPlayer, diceRoll, game.getBoardLength());
@@ -254,11 +268,11 @@ class MonopolyServer {
 
         // Handle pass GO with money from pool
         if (moveResult.passedGo) {
-            PlayerManager.collectPassGoMoney(currentPlayer, 70);
+            PlayerManager.collectPassGoMoney(currentPlayer, PASS_GO_AMOUNT);
             this.broadcastToGame(gameId, {
                 type: 'PASSED_GO',
                 playerId: playerId,
-                amount: 70
+                amount: PASS_GO_AMOUNT
             });
 
             // In a real implementation, this would come from the prize pool
@@ -280,7 +294,11 @@ class MonopolyServer {
     handleLanding(game: GameRoom, player: Player, block: Block) {
         if (block.cornerBlock) {
             this.handleCornerFunction(game, player, block);
-            this.nextTurn(game);
+
+            // Don't call nextTurn for JAIL - wait for player choice
+            if (block.name !== "Jail") {
+                this.nextTurn(game);
+            }
         } else {
             const landingResult = PropertyManager.handlePropertyLanding(player, block, game.players);
 
@@ -343,7 +361,7 @@ class MonopolyServer {
         }
     }
 
-    handleBankruptcy(game: GameRoom, bankruptPlayer: Player, creditor: Player) {
+    async handleBankruptcy(game: GameRoom, bankruptPlayer: Player, creditor: Player) {
         // Calculate reward based on position
         const playersEliminated = game.initialPlayerCount - game.players.length + 1; // +1 for current player being eliminated
         const playersRemaining = game.players.length - 1;
@@ -377,8 +395,9 @@ class MonopolyServer {
             });
         }
 
-        // Remove player from game
-        const removed = game.removePlayer(bankruptPlayer.id);
+        // Eliminate player and assign rank
+        game.eliminatePlayer(bankruptPlayer.id);
+        const removed = true;
 
         if (!removed) {
             return;
@@ -393,7 +412,9 @@ class MonopolyServer {
             creditorName: creditor.name,
             players: game.getAllSanitizedPlayers(),
             rewardAmount: Math.floor(reward),
-            eliminationOrder: playersEliminated
+            eliminationOrder: playersEliminated,
+            rank: game.getPlayerRanking(bankruptPlayer.id),
+            playerRankings: game.getAllRankings()
         });
 
         // Clear pending rent
@@ -403,14 +424,22 @@ class MonopolyServer {
         if (game.players.length === 1) {
             const winner = game.players[0];
 
+            // Add winner to rankings (rank 1)
+            if (!game.playerRankings.find(r => r.playerId === winner.id)) {
+                game.playerRankings.push({ playerId: winner.id, rank: 1 });
+            }
+
             // Calculate starting pool value
-            const startingPoolValue = game.initialPlayerCount * 600;
+            const startingPoolValue = game.initialPlayerCount * (INITIAL_PLAYER_MONEY + 100);
 
             // Winner gets HALF of starting pool
             const winnerReward = startingPoolValue / 2;
 
             // Deduct from actual pool
             game.totalPool -= winnerReward;
+
+            // Distribute prizes via smart contract
+            await this.handlePrizeDistribution(game);
 
             this.broadcastToGame(game.id, {
                 type: 'GAME_ENDED',
@@ -419,11 +448,58 @@ class MonopolyServer {
                 winnerName: winner.name,
                 winnerReward: Math.floor(winnerReward),
                 remainingPool: Math.floor(game.totalPool),
-                players: game.getAllSanitizedPlayers()
+                players: game.getAllSanitizedPlayers(),
+                playerRankings: game.getAllRankings()
             });
         } else {
             // Continue game with next turn
             this.nextTurn(game);
+        }
+    }
+
+    async handlePrizeDistribution(game: GameRoom) {
+        try {
+            // Sort rankings by rank (1 = winner, 2 = 2nd place, etc.)
+            const sortedRankings = game.playerRankings.sort((a, b) => a.rank - b.rank);
+
+            // Get player addresses by rank
+            const winnerAddress = sortedRankings[0]?.playerId || ''; // Rank 1
+            const firstRunnerAddress = sortedRankings[1]?.playerId || winnerAddress; // Rank 2
+            const secondRunnerAddress = sortedRankings[2]?.playerId || firstRunnerAddress; // Rank 3
+            const loserAddress = sortedRankings[sortedRankings.length - 1]?.playerId || secondRunnerAddress; // Last rank
+
+            console.log(`\n🎁 Distributing prizes for game ${game.id}...`);
+            console.log(`Rankings (${sortedRankings.length} players):`);
+            sortedRankings.forEach(r => {
+                console.log(`  Rank ${r.rank}: ${r.playerId}`);
+            });
+
+            // Create ranked players array for contract
+            const rankedPlayers: [string, string, string, string] = [
+                winnerAddress,
+                firstRunnerAddress,
+                secondRunnerAddress,
+                loserAddress
+            ];
+
+            // Call smart contract to distribute prizes (uses game.id as string, converted to bytes32 internally)
+            const result = await distributePrizes(game.id, rankedPlayers);
+
+            console.log(`✅ Prize distribution successful!`);
+            console.log(`   Transaction: ${result.transactionHash}`);
+            console.log(`   Block: ${result.blockNumber}`);
+
+            if (result.failedTransfers && result.failedTransfers.length > 0) {
+                console.warn(`   ⚠️  ${result.failedTransfers.length} transfer(s) failed - manual resolution required\n`);
+            } else {
+                console.log(`   ✅ All transfers successful\n`);
+            }
+
+            return result;
+        } catch (error) {
+            console.error('❌ Prize distribution failed:', error);
+            // Don't throw - game should still end even if distribution fails
+            return null;
         }
     }
 
@@ -544,13 +620,28 @@ class MonopolyServer {
         this.broadcastToGame(game.id, {
             type: 'NEXT_TURN',
             currentPlayer: nextPlayer ? PlayerManager.sanitizePlayer(nextPlayer) : null,
-            players: game.getAllSanitizedPlayers()
+            players: game.getAllSanitizedPlayers(),
+            board: game.board
         });
     }
 
     // Removed - now handled by PropertyManager.calculateRent
 
     handleCornerFunction(game: GameRoom, player: Player, block: Block) {
+        // Special handling for JAIL - ask player for choice
+        if (block.name === "Jail") {
+            if (block.cornerFunction) {
+                block.cornerFunction(player);
+            }
+
+            this.sendToPlayer(player.webSocketLink, {
+                type: 'JAIL_CHOICE',
+                playerId: player.id,
+                message: 'You are in jail! Choose to pay 200 or roll dice (need > 4 to escape)'
+            });
+            return;
+        }
+
         if (block.cornerFunction) {
             const oldAmount = player.poolAmt;
             block.cornerFunction(player);
@@ -573,18 +664,34 @@ class MonopolyServer {
             const game = this.games.get(gameId);
 
             if (game) {
-                game.removePlayer(playerId);
-                this.broadcastToGame(gameId, {
-                    type: 'PLAYER_DISCONNECTED',
-                    playerId: playerId,
-                    players: game.getAllSanitizedPlayers()
-                });
+                // If game has started, eliminate player and assign rank
+                if (game.gameStarted) {
+                    game.eliminatePlayer(playerId);
 
-                // Check if game should end due to insufficient players
-                if (game.gameStarted && game.players.length < 2) {
-                    await this.endGame(gameId, 'insufficient_players');
-                } else if (game.isGameEmpty()) {
-                    this.games.delete(gameId);
+                    this.broadcastToGame(gameId, {
+                        type: 'PLAYER_DISCONNECTED',
+                        playerId: playerId,
+                        players: game.getAllSanitizedPlayers(),
+                        playerRankings: game.getAllRankings(),
+                        rank: game.getPlayerRanking(playerId)
+                    });
+
+                    // Check if game should end due to insufficient players
+                    if (game.players.length < MIN_PLAYERS) {
+                        await this.endGame(gameId, 'insufficient_players');
+                    }
+                } else {
+                    // If game hasn't started, just remove player
+                    game.removePlayer(playerId);
+                    this.broadcastToGame(gameId, {
+                        type: 'PLAYER_DISCONNECTED',
+                        playerId: playerId,
+                        players: game.getAllSanitizedPlayers()
+                    });
+
+                    if (game.isGameEmpty()) {
+                        this.games.delete(gameId);
+                    }
                 }
             }
 
@@ -596,22 +703,43 @@ class MonopolyServer {
         const game = this.games.get(gameId);
         if (!game) return;
 
-        // Calculate prize distribution
-        const prizeDistribution = await this.calculatePrizeDistribution(game, reason, winnerId);
+        // Assign final ranks to remaining players
+        // Winner gets rank 1, others get ranks based on order
+        if (reason === 'player_won' && winnerId) {
+            // Add winner as rank 1
+            if (!game.playerRankings.find(r => r.playerId === winnerId)) {
+                game.playerRankings.push({ playerId: winnerId, rank: 1 });
+            }
 
-        // Distribute prizes via smart contract (disabled - no NEAR integration)
-        if (prizeDistribution.length > 0) {
-            const distributionSuccess = false; // No actual distribution without NEAR
-
-            this.broadcastToGame(gameId, {
-                type: 'GAME_ENDED',
-                reason: reason,
-                winnerId: winnerId,
-                prizeDistribution: prizeDistribution,
-                distributionSuccess: distributionSuccess,
-                finalPoolBalance: '0'
+            // Assign ranks to remaining players
+            const remainingPlayers = game.players.filter(p => p.id !== winnerId);
+            remainingPlayers.forEach((player, index) => {
+                if (!game.playerRankings.find(r => r.playerId === player.id)) {
+                    game.playerRankings.push({ playerId: player.id, rank: index + 2 });
+                }
+            });
+        } else {
+            // For other end reasons, assign ranks to all remaining players
+            game.players.forEach((player, index) => {
+                if (!game.playerRankings.find(r => r.playerId === player.id)) {
+                    game.playerRankings.push({ playerId: player.id, rank: index + 1 });
+                }
             });
         }
+
+        // Distribute prizes via smart contract using playerRankings
+        const distributionResult = await this.handlePrizeDistribution(game);
+        const distributionSuccess = distributionResult !== null;
+
+        this.broadcastToGame(gameId, {
+            type: 'GAME_ENDED',
+            reason: reason,
+            winnerId: winnerId,
+            distributionSuccess: distributionSuccess,
+            transactionHash: distributionResult?.transactionHash,
+            blockNumber: distributionResult?.blockNumber,
+            playerRankings: game.getAllRankings()
+        });
 
         // Cleanup
         this.games.delete(gameId);
@@ -625,47 +753,35 @@ class MonopolyServer {
         }
     }
 
-    async calculatePrizeDistribution(game: GameRoom, reason: string, winnerId?: string): Promise<{ walletId: string; amount: string }[]> {
+    // DEPRECATED: This method was for NEAR integration and is no longer used
+    // Prize distribution is now handled by handlePrizeDistribution() using the smart contract
+    async calculatePrizeDistribution(game: GameRoom, reason: string, winnerId?: string): Promise<{ playerId: string; amount: string }[]> {
         const totalPoolBalance = '0'; // No NEAR integration
         const poolAmount = parseFloat(totalPoolBalance);
 
         if (poolAmount <= 0) return [];
 
-        const distribution: { walletId: string; amount: string }[] = [];
-
-        // Get wallet IDs for active players
-        const playersWithWallets = game.players
-            .map(player => {
-                const connection = Array.from(this.playerConnections.values())
-                    .find(conn => conn.playerId === player.id);
-                return {
-                    player,
-                    walletId: connection?.walletId
-                };
-            })
-            .filter(item => item.walletId);
+        const distribution: { playerId: string; amount: string }[] = [];
 
         if (reason === 'player_won' && winnerId) {
             // Winner takes most of the pool (90%), platform keeps 10%
-            const winner = playersWithWallets.find(item => item.player.id === winnerId);
-            if (winner && winner.walletId) {
+            const winner = game.players.find(p => p.id === winnerId);
+            if (winner) {
                 const winnerAmount = poolAmount * 0.9;
                 distribution.push({
-                    walletId: winner.walletId,
+                    playerId: winner.id,
                     amount: winnerAmount.toString()
                 });
             }
         } else if (reason === 'insufficient_players') {
             // Refund stakes equally to remaining players
-            if (playersWithWallets.length > 0) {
-                const refundAmount = poolAmount / playersWithWallets.length;
-                for (const { walletId } of playersWithWallets) {
-                    if (walletId) {
-                        distribution.push({
-                            walletId,
-                            amount: refundAmount.toString()
-                        });
-                    }
+            if (game.players.length > 0) {
+                const refundAmount = poolAmount / game.players.length;
+                for (const player of game.players) {
+                    distribution.push({
+                        playerId: player.id,
+                        amount: refundAmount.toString()
+                    });
                 }
             }
         }
@@ -676,6 +792,29 @@ class MonopolyServer {
     // Add method to manually end game when a player wins
     async handlePlayerWin(gameId: string, winnerId: string) {
         await this.endGame(gameId, 'player_won', winnerId);
+    }
+
+    // Handle player bankruptcy - eliminate and assign rank
+    handlePlayerBankruptcy(gameId: string, playerId: string) {
+        const game = this.games.get(gameId);
+        if (!game) return;
+
+        // Eliminate player and assign rank
+        game.eliminatePlayer(playerId);
+
+        this.broadcastToGame(gameId, {
+            type: 'PLAYER_BANKRUPT',
+            playerId: playerId,
+            rank: game.getPlayerRanking(playerId),
+            players: game.getAllSanitizedPlayers(),
+            playerRankings: game.getAllRankings()
+        });
+
+        // Check if only one player remains - they win
+        if (game.players.length === 1) {
+            const winnerId = game.players[0].id;
+            this.handlePlayerWin(gameId, winnerId);
+        }
     }
 
     sendToPlayer(ws: WebSocket, message: GameMessage) {
@@ -722,6 +861,77 @@ class MonopolyServer {
             message: message,
             timestamp: new Date().toISOString()
         });
+    }
+
+    handleJailChoice(ws: WebSocket, gameId: string, playerId: string, choice: 'pay' | 'roll') {
+        const game = this.games.get(gameId);
+        if (!game) {
+            this.sendError(ws, 'Game not found');
+            return;
+        }
+
+        const player = game.getPlayerById(playerId);
+        if (!player) {
+            this.sendError(ws, 'Player not found');
+            return;
+        }
+
+        if (!player.inJail) {
+            this.sendError(ws, 'Player is not in jail');
+            return;
+        }
+
+        if (choice === 'pay') {
+            // Player pays to escape jail
+            if (player.poolAmt < JAIL_ESCAPE_PAYMENT) {
+                this.sendError(ws, 'Insufficient funds to pay jail fee');
+                return;
+            }
+
+            player.poolAmt -= JAIL_ESCAPE_PAYMENT;
+            player.inJail = false;
+
+            this.broadcastToGame(gameId, {
+                type: 'CORNER_BLOCK_EFFECT',
+                playerId: player.id,
+                blockName: 'Jail',
+                amountChange: -JAIL_ESCAPE_PAYMENT,
+                player: PlayerManager.sanitizePlayer(player),
+                message: `${player.name} paid ${JAIL_ESCAPE_PAYMENT} to escape jail`
+            });
+
+            this.nextTurn(game);
+        } else if (choice === 'roll') {
+            // Player rolls dice to try to escape
+            const diceRoll = Math.floor(Math.random() * 6) + 1;
+            const escaped = diceRoll > JAIL_ESCAPE_DICE_THRESHOLD;
+
+            if (escaped) {
+                player.inJail = false;
+
+                this.broadcastToGame(gameId, {
+                    type: 'JAIL_ROLL_RESULT',
+                    playerId: player.id,
+                    diceRoll: diceRoll,
+                    escaped: true,
+                    player: PlayerManager.sanitizePlayer(player),
+                    message: `${player.name} rolled ${diceRoll} and escaped jail!`
+                });
+
+                this.nextTurn(game);
+            } else {
+                this.broadcastToGame(gameId, {
+                    type: 'JAIL_ROLL_RESULT',
+                    playerId: player.id,
+                    diceRoll: diceRoll,
+                    escaped: false,
+                    player: PlayerManager.sanitizePlayer(player),
+                    message: `${player.name} rolled ${diceRoll} and failed to escape jail. Stay in jail.`
+                });
+
+                this.nextTurn(game);
+            }
+        }
     }
 
     generateGameId(): string {
