@@ -5,21 +5,24 @@ import { GameRoom } from "./models/GameRoom";
 import { PlayerManager } from "./managers/PlayerManager";
 import { PropertyManager } from "./managers/PropertyManager";
 import { JAIL_ESCAPE_PAYMENT, JAIL_ESCAPE_DICE_THRESHOLD, PASS_GO_AMOUNT, INITIAL_PLAYER_MONEY, MIN_PLAYERS } from "./constants";
-// COMMENTED OUT FOR TESTING - Re-enable when ready for blockchain integration
-// import { distributePrizes } from "./contract/contractFunction";
+import { config } from "dotenv";
+
+config();
 
 class MonopolyServer {
     private wss: WebSocketServer;
     private games: Map<string, GameRoom>;
     private playerConnections: Map<WebSocket, { gameId: string; playerId: string }>;
 
-    constructor(port = 8080) {
-        this.wss = new WebSocketServer({ port });
+    constructor(port?: number) {
+        const serverPort = port || parseInt(process.env.PORT || '8080', 10);
+        this.wss = new WebSocketServer({ port: serverPort });
         this.games = new Map();
         this.playerConnections = new Map();
 
         this.wss.on('connection', this.handleConnection.bind(this));
-        console.log(`Monopoly WebSocket server running on port ${port}`);
+        console.log(`🎲 Monopoly WebSocket server running on port ${serverPort}`);
+        console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
     }
 
     handleConnection(ws: WebSocket) {
@@ -1041,6 +1044,7 @@ class MonopolyServer {
 // GameRoom class moved to /src/models/GameRoom.ts
 
 // Start the server
-new MonopolyServer(8080);
+const PORT = parseInt(process.env.PORT || '8080', 10);
+new MonopolyServer(PORT);
 
 module.exports = { MonopolyServer };

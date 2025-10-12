@@ -6,8 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
-    "prepublish": "npm run build",
-    "dev": "npx tsx src/index.ts",
+    "start": "node lib/boardLogic.js",
+    "dev": "npx tsx src/boardLogic.ts",
+    "dev:test": "npx tsx src/index.ts",
     "board": "npx tsx src/boardLogic.ts"
   },
   "keywords": [],
@@ -29,6 +30,7 @@
     "@nomicfoundation/hardhat-ethers": "^3.1.0",
     "@nomicfoundation/hardhat-toolbox": "^5.0.0",
     "ethers": "^6.15.0",
-    "hardhat": "^2.26.3"
+    "hardhat": "^2.26.3",
+    "tsx": "^4.20.6"
   }
 }
