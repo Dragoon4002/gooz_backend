@@ -17,7 +17,7 @@ pragma solidity ^0.8.0;
  * 1. Each player deposits for themselves using playerDeposit()
  * 2. Game completes, owner calls prizeWithdrawal() with ranked players
  * 3. Prizes distributed: Winner (2x), 1st Runner (1x), 2nd Runner (0.5x), Last (0x)
- * 4. Remaining funds sent to creator wallet (even if some transfers fail)
+ * 4. Remaining funds (including failed transfers) sent to owner wallet
  * 5. Emergency withdrawal available if needed
  */
 contract MonopolyGameEscrow {
@@ -25,12 +25,12 @@ contract MonopolyGameEscrow {
     address public creatorWallet;
 
     // Constants for gas optimization
-    uint256 public constant ENTRY_FEE = 5 ether; // 5 U2U per player
+    uint256 public constant ENTRY_FEE = 1 ether; // 1 U2U per player
     uint256 public constant TOTAL_PLAYERS = 4;
-    uint256 private constant WINNER_PRIZE = 10 ether; // ENTRY_FEE * 2 = 10 U2U
-    uint256 private constant FIRST_RUNNER_PRIZE = 5 ether; // ENTRY_FEE = 5 U2U
-    uint256 private constant SECOND_RUNNER_PRIZE = 2.5 ether; // ENTRY_FEE / 2 = 2.5 U2U
-    uint256 private constant TOTAL_POOL = 20 ether; // ENTRY_FEE * 4 = 20 U2U
+    uint256 private constant WINNER_PRIZE = 2 ether; // ENTRY_FEE * 2 = 2 U2U
+    uint256 private constant FIRST_RUNNER_PRIZE = 1 ether; // ENTRY_FEE = 1 U2U
+    uint256 private constant SECOND_RUNNER_PRIZE = 0.5 ether; // ENTRY_FEE / 2 = 0.5 U2U
+    uint256 private constant TOTAL_POOL = 4 ether; // ENTRY_FEE * 4 = 4 U2U
 
     // Reentrancy guard
     uint256 private constant NOT_ENTERED = 1;
@@ -65,7 +65,7 @@ contract MonopolyGameEscrow {
         uint256 secondRunnerAmount,
         address lastPlayer,
         uint256 lastPlayerAmount,
-        uint256 remainderToCreator
+        uint256 remainderToOwner
     );
 
     event EmergencyWithdrawal(
@@ -139,7 +139,7 @@ contract MonopolyGameEscrow {
      * @notice Distribute prizes to players based on their rankings
      * @param _gameId The game ID
      * @param _rankedPlayers Array of 4 player addresses [winner, 1st runner, 2nd runner, last]
-     * @dev Transfers prizes and sends remaining funds from THIS game only to creatorWallet
+     * @dev Transfers prizes and sends remaining funds from THIS game only to owner
      */
     function prizeWithdrawal(
         bytes32 _gameId,
@@ -211,17 +211,15 @@ contract MonopolyGameEscrow {
         // Calculate remainder from THIS game only (not entire contract balance)
         // CRITICAL FIX: Use TOTAL_POOL instead of address(this).balance
         // This prevents stealing funds from other active games
-        uint256 remainderToCreator;
+        uint256 remainderToOwner;
         unchecked {
-            remainderToCreator = TOTAL_POOL - totalDistributed;
+            remainderToOwner = TOTAL_POOL - totalDistributed;
         }
 
-        // Transfer remainder to creator wallet
-        if (remainderToCreator > 0) {
-            (bool successCreator, ) = payable(creatorWallet).call{
-                value: remainderToCreator
-            }("");
-            require(successCreator, "Creator transfer failed");
+        // Transfer all remaining funds (including failed player transfers) to owner wallet
+        // No require to prevent permanent fund lock
+        if (remainderToOwner > 0) {
+            payable(owner).call{value: remainderToOwner}("");
         }
 
         emit PrizeDistributed(
@@ -234,7 +232,7 @@ contract MonopolyGameEscrow {
             successSecond ? SECOND_RUNNER_PRIZE : 0,
             lastPlayer,
             0,
-            remainderToCreator
+            remainderToOwner
         );
     }
 

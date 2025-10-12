@@ -6,6 +6,7 @@ import { GameRoom } from "./models/GameRoom";
 import { PlayerManager } from "./managers/PlayerManager";
 import { PropertyManager } from "./managers/PropertyManager";
 import { JAIL_ESCAPE_PAYMENT, JAIL_ESCAPE_DICE_THRESHOLD, PASS_GO_AMOUNT, INITIAL_PLAYER_MONEY, MIN_PLAYERS } from "./constants";
+import { distributePrizes } from "./contract/contractFunction";
 import { config } from "dotenv";
 
 config();
@@ -624,21 +625,14 @@ class MonopolyServer {
             ];
 
             // Call smart contract to distribute prizes (uses game.id as string, converted to bytes32 internally)
-            // COMMENTED OUT FOR TESTING - Re-enable when ready for blockchain integration
-            // const result = await distributePrizes(game.id, rankedPlayers);
+            const result = await distributePrizes(game.id, rankedPlayers);
 
-            console.log(`⚠️  Prize distribution SKIPPED (blockchain disabled for testing)`);
-            // console.log(`✅ Prize distribution successful!`);
-            // console.log(`   Transaction: ${result.transactionHash}`);
-            // console.log(`   Block: ${result.blockNumber}`);
+            console.log(`✅ Prize distribution successful!`);
+            console.log(`   Transaction: ${result.transactionHash}`);
+            console.log(`   Block: ${result.blockNumber}`);
+            console.log(`   Note: Failed transfers automatically sent to owner wallet\n`);
 
-            // if (result.failedTransfers && result.failedTransfers.length > 0) {
-            //     console.warn(`   ⚠️  ${result.failedTransfers.length} transfer(s) failed - manual resolution required\n`);
-            // } else {
-            //     console.log(`   ✅ All transfers successful\n`);
-            // }
-
-            return null; // Skip blockchain distribution for testing
+            return result;
         } catch (error) {
             console.error('❌ Prize distribution failed:', error);
             // Don't throw - game should still end even if distribution fails
