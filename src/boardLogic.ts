@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 import { WebSocket, Server as WebSocketServer } from "ws";
+import { createServer } from "http";
 import { Player, Block, ClientMessage, GameMessage } from "./types";
 import { GameRoom } from "./models/GameRoom";
 import { PlayerManager } from "./managers/PlayerManager";
@@ -13,21 +14,65 @@ class MonopolyServer {
     private wss: WebSocketServer;
     private games: Map<string, GameRoom>;
     private playerConnections: Map<WebSocket, { gameId: string; playerId: string }>;
+    private httpServer: any;
 
     constructor(port?: number, host?: string) {
         const serverPort = port || parseInt(process.env.PORT || '8080', 10);
         const serverHost = host || process.env.HOST || '0.0.0.0';
 
-        this.wss = new WebSocketServer({
-            port: serverPort,
-            host: serverHost
+        // Create HTTP server for health checks
+        this.httpServer = createServer((req, res) => {
+            if (req.url === '/health' || req.url === '/') {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    status: 'ok',
+                    uptime: process.uptime(),
+                    activeGames: this.games.size,
+                    activePlayers: this.playerConnections.size,
+                    timestamp: new Date().toISOString()
+                }));
+            } else {
+                res.writeHead(404);
+                res.end('Not Found');
+            }
         });
+
+        // Attach WebSocket server to HTTP server
+        this.wss = new WebSocketServer({ server: this.httpServer });
         this.games = new Map();
         this.playerConnections = new Map();
 
+        // Start HTTP server
+        this.httpServer.listen(serverPort, serverHost, () => {
+            console.log(`🎲 Monopoly WebSocket server running on ws://${serverHost}:${serverPort}`);
+            console.log(`🏥 Health check endpoint: http://${serverHost}:${serverPort}/health`);
+            console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
+        });
+
+        // Error handling
+        this.httpServer.on('error', (error: any) => {
+            console.error('❌ HTTP Server error:', error);
+        });
+
         this.wss.on('connection', this.handleConnection.bind(this));
-        console.log(`🎲 Monopoly WebSocket server running on ws://${serverHost}:${serverPort}`);
-        console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
+        this.wss.on('error', (error: any) => {
+            console.error('❌ WebSocket Server error:', error);
+        });
+
+        // Graceful shutdown
+        process.on('SIGTERM', () => this.shutdown());
+        process.on('SIGINT', () => this.shutdown());
+    }
+
+    private shutdown() {
+        console.log('🛑 Shutting down server gracefully...');
+        this.wss.close(() => {
+            console.log('✅ WebSocket server closed');
+            this.httpServer.close(() => {
+                console.log('✅ HTTP server closed');
+                process.exit(0);
+            });
+        });
     }
 
     handleConnection(ws: WebSocket) {

@@ -65,11 +65,31 @@ npm run build
 npm start
 ```
 
+## Health Check
+
+The server provides an HTTP health check endpoint:
+
+- **Local**: `http://localhost:8080/health`
+- **Render**: `https://your-app-name.onrender.com/health`
+
+Response example:
+```json
+{
+  "status": "ok",
+  "uptime": 3600.5,
+  "activeGames": 2,
+  "activePlayers": 8,
+  "timestamp": "2025-10-12T10:30:00.000Z"
+}
+```
+
 ## WebSocket Connection
 
-The server runs a WebSocket server that clients can connect to:
+The server runs both HTTP (for health checks) and WebSocket on the same port:
 
-- **Local**: `ws://localhost:8080`
-- **Render**: `wss://your-app-name.onrender.com`
+- **HTTP Local**: `http://localhost:8080`
+- **HTTP Render**: `https://your-app-name.onrender.com`
+- **WebSocket Local**: `ws://localhost:8080`
+- **WebSocket Render**: `wss://your-app-name.onrender.com`
 
 ⚠️ **Important**: Render uses `wss://` (secure WebSocket) in production.
