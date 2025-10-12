@@ -9,6 +9,7 @@ Set these environment variables in Render dashboard:
 ```bash
 # Server Configuration
 PORT=8080  # Render will override this automatically
+HOST=0.0.0.0  # Bind to all network interfaces
 
 # Wallet Keys
 PRIVATE_KEY=your_private_key_here

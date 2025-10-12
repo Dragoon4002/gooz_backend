@@ -14,14 +14,19 @@ class MonopolyServer {
     private games: Map<string, GameRoom>;
     private playerConnections: Map<WebSocket, { gameId: string; playerId: string }>;
 
-    constructor(port?: number) {
+    constructor(port?: number, host?: string) {
         const serverPort = port || parseInt(process.env.PORT || '8080', 10);
-        this.wss = new WebSocketServer({ port: serverPort });
+        const serverHost = host || process.env.HOST || '0.0.0.0';
+
+        this.wss = new WebSocketServer({
+            port: serverPort,
+            host: serverHost
+        });
         this.games = new Map();
         this.playerConnections = new Map();
 
         this.wss.on('connection', this.handleConnection.bind(this));
-        console.log(`🎲 Monopoly WebSocket server running on port ${serverPort}`);
+        console.log(`🎲 Monopoly WebSocket server running on ws://${serverHost}:${serverPort}`);
         console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
     }
 
@@ -1045,6 +1050,8 @@ class MonopolyServer {
 
 // Start the server
 const PORT = parseInt(process.env.PORT || '8080', 10);
-new MonopolyServer(PORT);
+const host = process.env.HOST || '0.0.0.0';
+console.log(`Starting Monopoly server on ws://${host}:${PORT}`);
+new MonopolyServer(PORT, host);
 
 module.exports = { MonopolyServer };

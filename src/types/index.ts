@@ -57,7 +57,7 @@ export interface MessagePayload {
 }
 
 export interface GameMessage {
-    type: 'GAME_CREATED' | 'PLAYER_JOINED' | 'GAME_STARTED' | 'DICE_ROLLED' |
+    type: 'GAME_CREATED' | 'PLAYER_JOINED' | 'PLAYER_LEFT' | 'GAME_STARTED' | 'DICE_ROLLED' |
           'BUY_OR_PASS' | 'PROPERTY_BOUGHT' | 'PROPERTY_PASSED' | 'PROPERTY_SOLD' |
           'RENT_PAID' | 'CORNER_BLOCK_EFFECT' | 'NEXT_TURN' | 'INSUFFICIENT_FUNDS' |
           'ERROR' | 'PLAYER_DISCONNECTED' | 'PASSED_GO' | 'GAME_ENDED' | 'PLAYER_BANKRUPT' |
