@@ -151,16 +151,12 @@ class MonopolyServer {
         this.games.set(gameId, game);
         this.playerConnections.set(ws, { gameId, playerId: player.id });
 
-        // Get initial pool balance (disabled - no NEAR integration)
-        const poolBalance = '0';
-
         this.sendToPlayer(ws, {
             type: 'GAME_CREATED',
             gameId: gameId,
             playerId: player.id,
             player: PlayerManager.sanitizePlayer(player),
             board: game.board,
-            poolBalance: poolBalance,
             playerStake: stakeAmount || '0'
         });
     }
@@ -206,7 +202,6 @@ class MonopolyServer {
                 gameId: gameId,  // Include gameId for frontend sync
                 player: PlayerManager.sanitizePlayer(existingPlayerInThisGame),
                 players: game.getAllSanitizedPlayers(),
-                poolBalance: '0',
                 canStart: game.canStartGame(),
                 creatorId: game.creatorId
             });
@@ -261,15 +256,11 @@ class MonopolyServer {
 
         this.playerConnections.set(ws, { gameId, playerId: player.id });
 
-        // Get updated pool balance (disabled - no NEAR integration)
-        const poolBalance = '0';
-
         this.broadcastToGame(gameId, {
             type: 'PLAYER_JOINED',
             gameId: gameId,  // Include gameId so frontend can update
             player: PlayerManager.sanitizePlayer(player),
             players: game.getAllSanitizedPlayers(),
-            poolBalance: poolBalance,
             canStart: game.canStartGame(),
             creatorId: game.creatorId
         });
@@ -323,6 +314,16 @@ class MonopolyServer {
         const currentPlayer = game.getCurrentPlayer();
         if (!currentPlayer) {
             this.sendError(ws, 'No current player');
+            return;
+        }
+
+        // Check if player is in jail - show jail choice instead of rolling
+        if (currentPlayer.inJail) {
+            this.sendToPlayer(ws, {
+                type: 'JAIL_CHOICE',
+                playerId: playerId,
+                message: 'You are in jail! Choose to pay 200 or roll dice (need > 4 to escape)'
+            });
             return;
         }
 
@@ -842,10 +843,8 @@ class MonopolyServer {
         }
     }
 
-    // DEPRECATED: This method was for NEAR integration and is no longer used
-    // Prize distribution is now handled by handlePrizeDistribution() using the smart contract
     async calculatePrizeDistribution(game: GameRoom, reason: string, winnerId?: string): Promise<{ playerId: string; amount: string }[]> {
-        const totalPoolBalance = '0'; // No NEAR integration
+        const totalPoolBalance = '0';
         const poolAmount = parseFloat(totalPoolBalance);
 
         if (poolAmount <= 0) return [];

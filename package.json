@@ -6,11 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
-    "lint": "tslint -c tslint.json src/**/*.ts",
     "prepublish": "npm run build",
     "dev": "npx tsx src/index.ts",
-    "board": "npx tsx src/boardLogic.ts",
-    "player": "npx tsx src/playerMovement.ts"
+    "board": "npx tsx src/boardLogic.ts"
   },
   "keywords": [],
   "author": "",
@@ -19,9 +17,6 @@
   "dependencies": {
     "@types/ws": "^8.18.1",
     "dotenv": "^17.2.3",
-    "near-api-js": "^6.3.0",
-    "randomness-js": "^1.0.2",
-    "tslint": "^6.1.3",
     "typescript": "^5.9.2",
     "ws": "^8.18.3"
   },
