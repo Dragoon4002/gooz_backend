@@ -1,5 +1,5 @@
 import { WebSocketServer } from "ws";
-import { playerDeposit, distributePrizes } from "./contract/contractFunction";
+import { distributePrizes } from "./contract/contractFunction/index_celo";
 import { config } from "dotenv";
 
 config();
@@ -19,32 +19,12 @@ async function testContractFunctions() {
   console.log('='.repeat(60) + '\n');
 
   try {
-    // Test 1: Player Deposits
-    console.log('📝 Test 1: Player Deposits');
+    // NOTE: In Celo contract, players deposit for themselves via frontend
+    // Server only distributes prizes after game ends
+
+    console.log('📝 Note: Player deposits are handled by players themselves via frontend');
+    console.log('📝 This test will only test prize distribution');
     console.log('-'.repeat(60));
-
-    const players = [
-      { name: 'RUNNER_UP_1', address: RUNNER_UP_1 },
-      { name: 'WINNER', address: WINNER },
-      { name: 'RUNNER_UP_2', address: RUNNER_UP_2 },
-      { name: 'LOSER', address: LOSER }
-    ];
-
-    for (const player of players) {
-      console.log(`\n💰 Depositing for ${player.name} (${player.address})...`);
-      try {
-        const result = await playerDeposit(TEST_GAME_ID, player.address);
-        console.log(`   ✅ Success! Tx: ${result.transactionHash}`);
-        console.log(`   📦 Block: ${result.blockNumber}`);
-      } catch (error: any) {
-        console.log(`   ❌ Failed: ${error.message}`);
-      }
-    }
-
-    console.log('\n' + '='.repeat(60));
-    console.log('⏳ Waiting 5 seconds before prize distribution...');
-    console.log('='.repeat(60));
-    await new Promise(resolve => setTimeout(resolve, 5000));
 
     // Test 2: Prize Distribution
     console.log('\n📝 Test 2: Prize Distribution');
@@ -64,12 +44,11 @@ async function testContractFunctions() {
       ];
 
       const result = await distributePrizes(TEST_GAME_ID, rankedPlayers);
-      console.log(`   ✅ Prize distribution successful!`);
-      console.log(`   📝 Tx: ${result.transactionHash}`);
-      console.log(`   📦 Block: ${result.blockNumber}`);
-
-      if (result.failedTransfers && result.failedTransfers.length > 0) {
-        console.log(`   ⚠️  Failed transfers detected - see warnings above`);
+      if (result.success) {
+        console.log(`   ✅ Prize distribution successful!`);
+        console.log(`   📝 Tx: ${result.transactionHash}`);
+      } else {
+        console.log(`   ❌ Failed: ${result.error}`);
       }
     } catch (error: any) {
       console.log(`   ❌ Failed: ${error.message}`);

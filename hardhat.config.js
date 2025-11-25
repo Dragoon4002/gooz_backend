@@ -3,33 +3,23 @@ require("dotenv").config();
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
-  solidity: {
-    version: "0.8.20",
-    settings: {
-      optimizer: {
-        enabled: true,
-        runs: 200,
-      },
-    },
-  },
+  solidity: "0.8.0",
   networks: {
-    u2u_testnet: {
-      url: process.env.RPC_URL || "https://rpc-nebulas-testnet.u2u.xyz",
-      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-      chainId: 2484, // U2U Testnet Chain ID
-      gasPrice: "auto",
+    celo: {
+      url: process.env.CELO_MAINNET_RPC || "https://forno.celo.org",
+      accounts: [process.env.PRIVATE_KEY],
+      chainId: 42220,
     },
-    u2u_mainnet: {
-      url: "https://rpc-mainnet.u2u.xyz", // U2U Mainnet RPC (Verified)
-      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
-      chainId: 39, // 0x27 in hex - U2U Mainnet Chain ID (Verified)
-      gasPrice: "auto",
+    alfajores: {
+      url: process.env.CELO_TESTNET_RPC || "https://alfajores-forno.celo-testnet.org",
+      accounts: [process.env.PRIVATE_KEY],
+      chainId: 44787,
     },
   },
-  paths: {
-    sources: "./contracts",
-    tests: "./test",
-    cache: "./cache",
-    artifacts: "./artifacts",
+  etherscan: {
+    apiKey: {
+      celo: process.env.CELOSCAN_API_KEY || "",
+      alfajores: process.env.CELOSCAN_API_KEY || "",
+    },
   },
 };

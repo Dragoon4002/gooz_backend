@@ -2,7 +2,7 @@
 
 // Player Constants
 export const INITIAL_PLAYER_MONEY = 500;
-export const PASS_GO_AMOUNT = 70;
+export const PASS_GO_AMOUNT = 70; // GO corner block payment
 
 // Transaction Fee
 export const TRANSACTION_FEE_RATE = 0.05; // 5% fee on all transactions
@@ -10,12 +10,12 @@ export const TRANSACTION_FEE_RATE = 0.05; // 5% fee on all transactions
 // Corner Block Constants
 export const CORNER_PENALTY_AMOUNT = 100;
 export const REST_HOUSE_POSITION = 4;
-export const REST_HOUSE_PAYMENT = 50;
+export const REST_HOUSE_PAYMENT = 50; // +$50 when landing on Rest House
 export const JAIL_POSITION = 7;
-export const JAIL_ESCAPE_PAYMENT = 200;
+export const JAIL_ESCAPE_PAYMENT = 200; // -$200 to escape jail (or roll > 4)
 export const JAIL_ESCAPE_DICE_THRESHOLD = 4; // Must roll > 4 to escape
 export const PARTY_HOUSE_POSITION = 11;
-export const PARTY_HOUSE_COST = 50;
+export const PARTY_HOUSE_COST = 50; // -$50 when landing on Party House
 
 // Property Sell Rate
 export const PROPERTY_SELL_RATE = 0.6; // Sell for 60% of purchase price
@@ -24,83 +24,83 @@ export const PROPERTY_SELL_RATE = 0.6; // Sell for 60% of purchase price
 export const BOARD_PROPERTIES = {
     SIDE_1: [
         {
-            name: "Mediterranean Avenue",
-            price: 60,
-            rent: 10,
-            imageURL: "/images/mediterranean.png",
-            description: "A quiet and modest street where many journeys begin."
-        },
-        {
-            name: "Baltic Avenue",
-            price: 60,
-            rent: 10,
-            imageURL: "/images/baltic.png",
-            description: "A low-cost neighborhood with humble but steady growth."
-        },
-        {
-            name: "Oriental Avenue",
+            name: "Startup Street",
             price: 100,
-            rent: 15,
-            imageURL: "/images/oriental.png",
-            description: "A lively street lined with colorful shops and cultural charm."
+            rent: 20,
+            imageURL: "/images/startup_street.png",
+            description: "A colorful avenue lined with co-working spaces, scooter-riding entrepreneurs, and murals symbolizing innovation and hustle culture."
+        },
+        {
+            name: "Pixel Plaza",
+            price: 120,
+            rent: 25,
+            imageURL: "/images/pixel_plaza.png",
+            description: "A vibrant digital city plaza glowing with pixel-style billboards, futuristic cafés, and neon lighting — representing a tech startup hub in a modern metropolis."
+        },
+        {
+            name: "Cloud Street",
+            price: 150,
+            rent: 30,
+            imageURL: "/images/cloud_street.jpeg",
+            description: "A sleek smart-city avenue lined with glass buildings, autonomous cars, and drones hovering above, symbolizing innovation and connected living."
         }
     ],
 
     SIDE_2: [
         {
-            name: "Vermont Avenue",
-            price: 100,
-            rent: 15,
-            imageURL: "/images/vermont.png",
-            description: "A calm green lane, perfect for players seeking balance early on."
+            name: "Venture Valley",
+            price: 180,
+            rent: 40,
+            imageURL: "/images/venture_valley.png",
+            description: "A green, sustainable corporate area surrounded by glass buildings, electric shuttles, rooftop gardens, and clean energy infrastructure."
         },
         {
-            name: "Virginia Avenue",
-            price: 160,
-            rent: 25,
-            imageURL: "/images/virginia.png",
-            description: "A bustling mid-tier area known for trade and quick turnovers."
+            name: "Byte Boulevard",
+            price: 200,
+            rent: 45,
+            imageURL: "/images/byte_bolvard.jpeg",
+            description: "A wide modern boulevard with smart streetlights, digital kiosks, electric cars, and minimalist office buildings glowing at dusk."
         }
     ],
 
     SIDE_3: [
         {
-            name: "St. James Place",
-            price: 180,
-            rent: 30,
-            imageURL: "/images/stjames.png",
-            description: "A charming district where rent rises fast and fortunes shift quickly."
+            name: "Silicon Square",
+            price: 220,
+            rent: 50,
+            imageURL: "/images/solicon_square.png",
+            description: "A clean tech business district with modern architecture, startup offices, and a public square featuring a large holographic globe."
         },
         {
-            name: "Tennessee Avenue",
-            price: 180,
-            rent: 30,
-            imageURL: "/images/tennessee.png",
-            description: "A vibrant strip buzzing with music, movement, and opportunity."
+            name: "Streamline Tower",
+            price: 240,
+            rent: 55,
+            imageURL: "/images/streamline_tower.png",
+            description: "A cutting-edge skyscraper made of curved glass and metal, reflecting the skyline — symbolizing speed, elegance, and success."
         },
         {
-            name: "New York Avenue",
-            price: 200,
-            rent: 35,
-            imageURL: "/images/newyork.png",
-            description: "The city’s pulse — bright lights, high stakes, and even higher rents."
+            name: "Neon Heights",
+            price: 260,
+            rent: 60,
+            imageURL: "/images/neon_heights.png",
+            description: "A tall luxury skyscraper district illuminated with blue and purple neon lights, surrounded by bustling nightlife and rooftop bars."
         }
     ],
 
     SIDE_4: [
         {
-            name: "Kentucky Avenue",
-            price: 220,
-            rent: 40,
-            imageURL: "/images/kentucky.png",
-            description: "A bold street where ambitious players make daring investments."
+            name: "Metro Mile",
+            price: 280,
+            rent: 65,
+            imageURL: "/images/metro_mile.jpeg",
+            description: "A busy city stretch featuring metro tracks, fast-paced traffic, and commuters in stylish attire, showing the pulse of urban life."
         },
         {
-            name: "Marvin Gardens",
-            price: 280,
-            rent: 55,
-            imageURL: "/images/marvin.png",
-            description: "A lush suburban retreat offering prestige and reliable income."
+            name: "Crypto Corner",
+            price: 300,
+            rent: 70,
+            imageURL: "/images/crypto_corner.jpeg",
+            description: "A street of futuristic cafés and fintech startups with digital billboards showing cryptocurrency prices and holographic trading screens."
         }
     ]
 };

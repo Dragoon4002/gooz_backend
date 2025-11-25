@@ -6,7 +6,7 @@ import { GameRoom } from "./models/GameRoom";
 import { PlayerManager } from "./managers/PlayerManager";
 import { PropertyManager } from "./managers/PropertyManager";
 import { JAIL_ESCAPE_PAYMENT, JAIL_ESCAPE_DICE_THRESHOLD, PASS_GO_AMOUNT, INITIAL_PLAYER_MONEY, MIN_PLAYERS } from "./constants";
-import { distributePrizes } from "./contract/contractFunction";
+import { distributePrizes, hasPlayerDeposited } from "./contract/contractFunction/index_celo";
 import { config } from "dotenv";
 
 config();
@@ -106,7 +106,8 @@ class MonopolyServer {
                     playerName: payload.playerName!,
                     colorCode: payload.colorCode,
                     stakeAmount: payload.stakeAmount || '1',
-                    playerId: playerId
+                    playerId: playerId,
+                    tempGameId: payload.tempGameId  // Pass tempGameId from frontend
                 });
                 break;
             case 'JOIN_GAME':
@@ -143,11 +144,12 @@ class MonopolyServer {
         }
     }
 
-    async createGame(ws: WebSocket, { playerName, colorCode, stakeAmount, playerId }: {
+    async createGame(ws: WebSocket, { playerName, colorCode, stakeAmount, playerId, tempGameId }: {
         playerName: string;
         colorCode?: string;
         stakeAmount?: string;
         playerId?: string;
+        tempGameId?: string;
     }) {
         if (!playerId) {
             this.sendError(ws, 'Player ID is required');
@@ -188,11 +190,10 @@ class MonopolyServer {
             }
         }
 
-        const gameId = this.generateGameId();
+        // Use frontend's gameId if provided (for deposit verification), otherwise generate new one
+        const gameId = tempGameId || this.generateGameId();
         const game = new GameRoom(gameId);
 
-        // Note: Player must deposit from their own wallet via frontend before joining
-        // Backend just manages game state, doesn't handle deposits
         console.log(`Creating game for player ${playerId}...`);
 
         const player = PlayerManager.createPlayer(playerName, ws, colorCode || '#FF0000', playerId);
@@ -204,6 +205,56 @@ class MonopolyServer {
 
         this.games.set(gameId, game);
         this.playerConnections.set(ws, { gameId, playerId: player.id });
+
+        // Verify player has deposited entry fee (player pays from their wallet on frontend)
+        try {
+            console.log(`💰 Verifying entry fee deposit for creator ${playerId}...`);
+            console.log(`📝 GameId being verified: ${gameId}`);
+            console.log(`👤 Player address: ${playerId}`);
+
+            // Retry verification up to 3 times with 1 second delay (for RPC sync)
+            let deposited = false;
+            let attempts = 0;
+            const maxAttempts = 3;
+
+            while (!deposited && attempts < maxAttempts) {
+                attempts++;
+                console.log(`🔍 Verification attempt ${attempts}/${maxAttempts}...`);
+
+                deposited = await hasPlayerDeposited(gameId, playerId!);
+
+                if (!deposited && attempts < maxAttempts) {
+                    console.log(`⏳ Deposit not found yet, waiting 1 second for RPC sync...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+
+            if (!deposited) {
+                console.error('❌ Creator has not deposited entry fee after 3 attempts');
+                console.error(`   GameId checked: ${gameId}`);
+                console.error(`   Player checked: ${playerId}`);
+                console.error(`   This usually means:`);
+                console.error(`   1. Player deposited to different gameId`);
+                console.error(`   2. Transaction not yet confirmed`);
+                console.error(`   3. RPC nodes not synced`);
+                // Remove player from game
+                game.removePlayer(player.id);
+                this.games.delete(gameId);
+                this.playerConnections.delete(ws);
+                this.sendError(ws, 'Could not verify your deposit. Please wait a moment and try again.');
+                return;
+            }
+
+            console.log(`✅ Creator deposit verified on-chain (attempt ${attempts})`);
+        } catch (error: any) {
+            console.error('❌ Failed to verify creator deposit:', error.message);
+            // Remove player from game on verification failure
+            game.removePlayer(player.id);
+            this.games.delete(gameId);
+            this.playerConnections.delete(ws);
+            this.sendError(ws, `Failed to verify your deposit: ${error.message}`);
+            return;
+        }
 
         this.sendToPlayer(ws, {
             type: 'GAME_CREATED',
@@ -297,8 +348,6 @@ class MonopolyServer {
             }
         }
 
-        // Note: Player must deposit from their own wallet via frontend before joining
-        // Backend just manages game state, doesn't handle deposits
         console.log(`Player ${playerId} joining game ${gameId}...`);
 
         const player = PlayerManager.createPlayer(playerName, ws, colorCode, playerId);
@@ -309,6 +358,50 @@ class MonopolyServer {
         }
 
         this.playerConnections.set(ws, { gameId, playerId: player.id });
+
+        // Verify player has deposited entry fee (player pays from their wallet on frontend)
+        try {
+            console.log(`💰 Verifying entry fee deposit for player ${playerId}...`);
+            console.log(`📝 GameId being verified: ${gameId}`);
+            console.log(`👤 Player address: ${playerId}`);
+
+            // Retry verification up to 3 times with 1 second delay (for RPC sync)
+            let deposited = false;
+            let attempts = 0;
+            const maxAttempts = 3;
+
+            while (!deposited && attempts < maxAttempts) {
+                attempts++;
+                console.log(`🔍 Verification attempt ${attempts}/${maxAttempts}...`);
+
+                deposited = await hasPlayerDeposited(gameId, playerId);
+
+                if (!deposited && attempts < maxAttempts) {
+                    console.log(`⏳ Deposit not found yet, waiting 1 second for RPC sync...`);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+            }
+
+            if (!deposited) {
+                console.error('❌ Player has not deposited entry fee after 3 attempts');
+                console.error(`   GameId checked: ${gameId}`);
+                console.error(`   Player checked: ${playerId}`);
+                // Remove player from game
+                game.removePlayer(player.id);
+                this.playerConnections.delete(ws);
+                this.sendError(ws, 'Could not verify your deposit. Please wait a moment and try again.');
+                return;
+            }
+
+            console.log(`✅ Player deposit verified on-chain (attempt ${attempts})`);
+        } catch (error: any) {
+            console.error('❌ Failed to verify player deposit:', error.message);
+            // Remove player from game on verification failure
+            game.removePlayer(player.id);
+            this.playerConnections.delete(ws);
+            this.sendError(ws, `Failed to verify your deposit: ${error.message}`);
+            return;
+        }
 
         this.broadcastToGame(gameId, {
             type: 'PLAYER_JOINED',
@@ -629,8 +722,7 @@ class MonopolyServer {
 
             console.log(`✅ Prize distribution successful!`);
             console.log(`   Transaction: ${result.transactionHash}`);
-            console.log(`   Block: ${result.blockNumber}`);
-            console.log(`   Note: Failed transfers automatically sent to owner wallet\n`);
+            console.log(`   Note: Failed transfers can be claimed by players via claimPrize()\n`);
 
             return result;
         } catch (error) {
@@ -874,7 +966,6 @@ class MonopolyServer {
             winnerId: winnerId,
             distributionSuccess: distributionSuccess,
             transactionHash: distributionResult?.transactionHash,
-            blockNumber: distributionResult?.blockNumber,
             playerRankings: game.getAllRankings()
         });
 
@@ -1081,7 +1172,14 @@ class MonopolyServer {
     }
 
     generateGameId(): string {
-        return crypto.randomBytes(4).toString('hex').toUpperCase();
+        // Generate 8-character alphanumeric ID (A-Z, 0-9)
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let result = '';
+        for (let i = 0; i < 8; i++) {
+            const randomIndex = Math.floor(Math.random() * chars.length);
+            result += chars.charAt(randomIndex);
+        }
+        return result;
     }
 }
 

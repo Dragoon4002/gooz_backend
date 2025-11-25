@@ -44,3 +44,59 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# ============================================
+# Smart Contract - Sensitive Files
+# ============================================
+
+# Deployment scripts (contain deployment logic)
+src/contract/deploy.ts
+
+# Test files (may contain test private keys and sensitive data)
+src/contract/conmtractTest/
+src/contract/integration/
+
+# Security analysis and audit reports (may reveal vulnerabilities)
+*SECURITY_ANALYSIS*.md
+*AUDIT*.md
+MAINNET_SECURITY_AUDIT.md
+CELO_SECURITY_ANALYSIS.md
+
+# Deployment guides (contain deployment details)
+*DEPLOYMENT_GUIDE*.md
+CELO_DEPLOYMENT_GUIDE.md
+
+# Compiled contract artifacts (if any)
+artifacts/
+cache/
+*.abi
+*.bin
+
+# Contract deployment logs
+deployment-*.log
+
+# Any files with "private" in the name
+*private*
+*Private*
+
+# Test wallet files
+test-wallets.json
+wallets.json
+CELO_DEPLOYMENT_GUIDE.md
+
+# Compiled contract artifacts (if any)
+artifacts/
+cache/
+*.abi
+*.bin
+
+# Contract deployment logs
+deployment-*.log
+
+# Any files with "private" in the name
+*private*
+*Private*
+
+# Test wallet files
+test-wallets.json
+wallets.json
